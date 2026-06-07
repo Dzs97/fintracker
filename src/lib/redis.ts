@@ -22,4 +22,7 @@ export const KEYS = {
   funds:       "ft:funds",         // Record<assetName, fundName>  e.g. { "Risky Hayek": "Risky Hayek" }
   splits:      "ft:splits",        // Record<srcName, Array<{name, weight, inv_type?}>>
                                    //   e.g. { Fintual: [{name:"Risky Hayek", weight:0.75, inv_type:"fund"}, ...] }
+  learnedCats: "ft:learnedCats",   // Record<lowercase-keyword, Category>
+                                   //   updated whenever the user submits an expense/CC entry —
+                                   //   the entry name becomes a keyword that maps to its category.
 }

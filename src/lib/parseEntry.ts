@@ -48,8 +48,14 @@ function today(): string {
   return new Date().toISOString().split("T")[0]
 }
 
-function guessCategory(text: string): string {
+function guessCategory(text: string, learned?: Record<string, string>): string {
   const lower = text.toLowerCase()
+  // User overrides come first — most specific
+  if (learned) {
+    for (const [k, v] of Object.entries(learned)) {
+      if (lower.includes(k)) return v
+    }
+  }
   for (const [k, v] of Object.entries(CATS)) {
     if (lower.includes(k)) return v
   }
@@ -62,7 +68,7 @@ export type ParsedEntry =
   | { entry_type: "cc";         name: string; amount: number; date: string; cat: string; card: string; installments: number }
   | { entry_type: "investment"; name: string; amount: number; date: string; gf: boolean; inv_type: "fund" | "stock" }
 
-export function parseEntry(raw: string): ParsedEntry | { error: string } {
+export function parseEntry(raw: string, learned?: Record<string, string>): ParsedEntry | { error: string } {
   const text = (raw ?? "").trim()
   if (!text) return { error: "empty input" }
 
@@ -117,7 +123,7 @@ export function parseEntry(raw: string): ParsedEntry | { error: string } {
   if (isCC && ccCard) {
     return {
       entry_type: "cc", name, amount, date,
-      cat: guessCategory(text),
+      cat: guessCategory(text, learned),
       card: CARD_MAP[ccCard],
       installments,
     }
@@ -125,7 +131,7 @@ export function parseEntry(raw: string): ParsedEntry | { error: string } {
   // Default: direct expense
   return {
     entry_type: "expense", name, amount, date,
-    cat: guessCategory(text),
+    cat: guessCategory(text, learned),
     note: isDolarApp ? "DolarApp" : undefined,
   }
 }

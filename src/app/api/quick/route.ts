@@ -4,6 +4,7 @@ import { nanoid } from "@/lib/utils"
 import { parseEntry } from "@/lib/parseEntry"
 import { getSplits, expandInvestment } from "@/lib/splits"
 import { stampNavs } from "@/lib/stampNav"
+import { loadLearned, recordLearned } from "@/lib/learnedCats"
 import type { Expense, Income, CCCharge, Investment } from "@/types"
 
 /**
@@ -27,7 +28,8 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}))
   const text = typeof body?.text === "string" ? body.text : ""
   const dry = !!body?.dry
-  const parsed = parseEntry(text)
+  const learned = await loadLearned()
+  const parsed = parseEntry(text, learned)
 
   if ("error" in parsed) {
     return NextResponse.json({ error: parsed.error, text }, { status: 400 })
@@ -52,6 +54,7 @@ export async function POST(req: NextRequest) {
     case "expense": {
       entry = { id: nanoid(), name: parsed.name, amount: parsed.amount, cat: parsed.cat as Expense["cat"], date: parsed.date, note: parsed.note }
       await patchState({ expenses: [...state.expenses, entry] })
+      void recordLearned(parsed.name, parsed.cat)
       break
     }
     case "income": {
@@ -66,6 +69,7 @@ export async function POST(req: NextRequest) {
         installments: parsed.installments,
       }
       await patchState({ cc: [...state.cc, entry] })
+      void recordLearned(parsed.name, parsed.cat)
       break
     }
     case "investment": {

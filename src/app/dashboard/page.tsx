@@ -47,6 +47,15 @@ export default function Dashboard() {
   const [tickers, setTickers] = useState<Record<string, string>>({})
   const [funds, setFunds] = useState<Record<string, string>>({})
   const [priceBusy, setPriceBusy] = useState(false)
+
+  // Undo toast: stash the deleted entity + a restore thunk
+  type Toast = { msg: string; restore: () => Promise<void> } | null
+  const [toast, setToast] = useState<Toast>(null)
+  useEffect(() => {
+    if (!toast) return
+    const t = setTimeout(() => setToast(null), 5000)
+    return () => clearTimeout(t)
+  }, [toast])
   const [viewMonth, setViewMonth] = useState(() => {
     const n = new Date(); return { y: n.getFullYear(), m: n.getMonth() }
   })
@@ -222,10 +231,57 @@ export default function Dashboard() {
     setForm(f => ({ ...f, invName: "", invAmt: "", invNote: "" }))
     closeForms(); triggerFlash(); load()
   }
-  const delEntry = async (type: "expense" | "income", id: string) => { await api("/api/entries", "DELETE", { type, id }); load() }
-  const delCC    = async (id: string) => { await api("/api/cc", "DELETE", { id }); load() }
-  const delInv   = async (id: string) => { await api("/api/investments", "DELETE", { id }); load() }
-  const settleCard  = async (card: string) => { await api("/api/cc", "PATCH", { card }); triggerFlash(); load() }
+  const delEntry = async (type: "expense" | "income", id: string) => {
+    const row = (type === "expense" ? state.expenses : state.income).find(e => e.id === id)
+    if (!row) return
+    await api("/api/entries", "DELETE", { type, id })
+    await load()
+    setToast({
+      msg: `Deleted ${type}: ${row.name}`,
+      restore: async () => {
+        const { id: _drop, ...rest } = row
+        await api("/api/entries", "POST", { type, ...rest })
+        await load()
+      },
+    })
+  }
+  const delCC = async (id: string) => {
+    const row = state.cc.find(e => e.id === id)
+    if (!row) return
+    await api("/api/cc", "DELETE", { id })
+    await load()
+    setToast({
+      msg: `Deleted charge: ${row.name}`,
+      restore: async () => {
+        const { id: _drop, ...rest } = row
+        await api("/api/cc", "POST", rest)
+        await load()
+      },
+    })
+  }
+  const delInv = async (id: string) => {
+    const row = state.investments.find(e => e.id === id)
+    if (!row) return
+    await api("/api/investments", "DELETE", { id })
+    await load()
+    setToast({
+      msg: `Deleted: ${row.name}`,
+      restore: async () => {
+        // Bypass split rules on restore — submit the exact row back
+        const { id: _drop, ...rest } = row
+        await api("/api/investments", "POST", { ...rest, _skipSplit: true })
+        await load()
+      },
+    })
+  }
+  const settleCard = async (card: string) => {
+    const pool = ccPoolByCard[card] ?? 0
+    if (pool <= 0) return
+    if (!confirm(`Settle ${card} — ${fmt(pool)} MXN?\n\nThis posts a real expense and zeros the unpaid pool.`)) return
+    await api("/api/cc", "PATCH", { card })
+    triggerFlash()
+    load()
+  }
   const updatePrice = async (ticker: string, price: number) => { await api("/api/investments", "PATCH", { ticker, price }); load() }
   const setTicker = async (name: string, ticker: string) => {
     await api("/api/prices", "PUT", { name, ticker })
@@ -1040,6 +1096,26 @@ export default function Dashboard() {
         )}
 
       </div>
+
+      {/* Undo toast */}
+      {toast && (
+        <div style={{
+          position: "fixed", left: 14, right: 14, bottom: 80, zIndex: 100,
+          background: C.cardHi, border: `1px solid ${C.border}`, borderRadius: 14,
+          padding: "12px 14px", boxShadow: "0 10px 30px rgba(0,0,0,0.4)",
+          display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
+        }}>
+          <span style={{ fontSize: 13, color: C.text, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{toast.msg}</span>
+          <button
+            onClick={async () => { const t = toast; setToast(null); await t.restore() }}
+            style={{
+              padding: "7px 13px", fontSize: 12, fontWeight: 700, border: "none", borderRadius: 10,
+              cursor: "pointer", background: C.green, color: "#0E0F12", fontFamily: "inherit",
+              flexShrink: 0,
+            }}
+          >Undo</button>
+        </div>
+      )}
     </div>
   )
 }

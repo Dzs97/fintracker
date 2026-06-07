@@ -11,9 +11,18 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const body = await req.json()
+  const { _skipSplit, ...rest } = body
   const state = await getState()
-  const splits = await getSplits()
-  const legs = await stampNavs(expandInvestment(body, splits))
+  let legs: Investment[]
+  if (_skipSplit) {
+    // Restore path — preserve all original fields verbatim. Skip stamping
+    // so existing purchase_price / purchase_nav round-trip unchanged.
+    const splits = {}
+    legs = expandInvestment(rest, splits)
+  } else {
+    const splits = await getSplits()
+    legs = await stampNavs(expandInvestment(rest, splits))
+  }
   await patchState({ investments: [...state.investments, ...legs] })
   return NextResponse.json(legs.length === 1 ? legs[0] : { ok: true, expanded: legs })
 }

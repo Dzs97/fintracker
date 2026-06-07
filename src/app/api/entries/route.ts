@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getState, patchState } from "@/lib/state"
 import { nanoid } from "@/lib/utils"
+import { recordLearned } from "@/lib/learnedCats"
 import type { Expense, Income } from "@/types"
 
 export async function GET() {
@@ -15,6 +16,7 @@ export async function POST(req: NextRequest) {
   if (type === "expense") {
     const entry: Expense = { id: nanoid(), ...body }
     await patchState({ expenses: [...state.expenses, entry] })
+    void recordLearned(entry.name, entry.cat)
     return NextResponse.json(entry)
   }
   if (type === "income") {
