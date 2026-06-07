@@ -19,4 +19,5 @@ export const KEYS = {
   fxUpdatedAt: "ft:fxUpdatedAt",
   tickers:     "ft:tickers",       // Record<assetName, ticker> e.g. { Nubank: "NU" }
   priceCache:  "ft:priceCache",    // Record<ticker, { price, updatedAt }>  (short TTL)
+  funds:       "ft:funds",         // Record<assetName, fundName>  e.g. { "Risky Hayek": "Risky Hayek" }
 }

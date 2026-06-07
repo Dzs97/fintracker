@@ -45,6 +45,7 @@ export default function Dashboard() {
   const [quickAdd, setQuickAdd] = useState<null | "expense" | "income" | "cc" | "investment">(null)
   const [activeInvTab, setActiveInvTab] = useState<"portfolio" | "pl" | "history">("portfolio")
   const [tickers, setTickers] = useState<Record<string, string>>({})
+  const [funds, setFunds] = useState<Record<string, string>>({})
   const [priceBusy, setPriceBusy] = useState(false)
   const [viewMonth, setViewMonth] = useState(() => {
     const n = new Date(); return { y: n.getFullYear(), m: n.getMonth() }
@@ -64,15 +65,17 @@ export default function Dashboard() {
   const load = useCallback(async () => {
     setRefreshing(true)
     try {
-      const [entries, ccData, invData, budgets, fx, tickerData] = await Promise.all([
+      const [entries, ccData, invData, budgets, fx, tickerData, fundData] = await Promise.all([
         api<{ expenses: AppState["expenses"]; income: AppState["income"] }>("/api/entries"),
         api<{ cc: AppState["cc"]; settled: AppState["settled"] }>("/api/cc"),
         api<{ investments: AppState["investments"]; prices: AppState["prices"] }>("/api/investments"),
         api<{ budgets: AppState["budgets"] }>("/api/budgets"),
         api<{ rate: number }>("/api/fx"),
         api<{ tickers: Record<string, string> }>("/api/prices"),
+        api<{ funds: Record<string, string> }>("/api/funds"),
       ])
       setTickers(tickerData.tickers ?? {})
+      setFunds(fundData.funds ?? {})
       setState({
         expenses: entries.expenses, income: entries.income,
         cc: ccData.cc, settled: ccData.settled,
@@ -221,8 +224,10 @@ export default function Dashboard() {
   }
   const refreshPrices = async () => {
     setPriceBusy(true)
-    try { await api("/api/prices", "POST"); await load() }
-    finally { setPriceBusy(false) }
+    try {
+      await Promise.all([api("/api/prices", "POST"), api("/api/funds", "POST")])
+      await load()
+    } finally { setPriceBusy(false) }
   }
 
   const doRefresh = () => { load() }
@@ -700,6 +705,50 @@ export default function Dashboard() {
                 ))}
               </div>
             </Card>
+
+            {/* Live fund prices */}
+            {Object.keys(funds).length > 0 && (
+              <Card style={{ padding: 16, marginBottom: 14 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                  <Label style={{ marginBottom: 0 }}>Live fund NAV</Label>
+                  <button onClick={refreshPrices} disabled={priceBusy} style={{
+                    padding: "5px 10px", fontSize: 10.5, fontWeight: 700, border: "none", borderRadius: 8,
+                    cursor: "pointer", background: priceBusy ? C.cardHi : C.purple, color: "#0E0F12",
+                    fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 5,
+                  }}>
+                    <Icon name="refresh" size={12} color="#0E0F12" />
+                    {priceBusy ? "Refreshing…" : "Refresh"}
+                  </button>
+                </div>
+                {Object.entries(funds).map(([name, fund], i, arr) => {
+                  const p = state.prices?.[name]
+                  return (
+                    <div key={name} style={{
+                      display: "flex", justifyContent: "space-between", alignItems: "center",
+                      padding: "8px 0",
+                      borderBottom: i < arr.length - 1 ? `1px solid ${C.border}` : "none",
+                    }}>
+                      <div>
+                        <div style={{ fontSize: 13.5, fontWeight: 600 }}>{name}</div>
+                        {name !== fund && <div style={{ fontSize: 10.5, color: C.dim, marginTop: 2 }}>→ {fund}</div>}
+                      </div>
+                      <div style={{ textAlign: "right" }}>
+                        {p ? (
+                          <>
+                            <div style={{ fontSize: 14.5, fontWeight: 700, color: C.purple, letterSpacing: "-0.3px", fontVariantNumeric: "tabular-nums" }}>
+                              {p.price.toFixed(4)} <span style={{ fontSize: 10, color: C.muted, fontWeight: 500 }}>{p.currency}</span>
+                            </div>
+                            <div style={{ fontSize: 10, color: C.dim, marginTop: 2 }}>as of {fmtDate(p.updatedAt.split("T")[0])}</div>
+                          </>
+                        ) : (
+                          <div style={{ fontSize: 11, color: C.muted }}>not fetched yet</div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </Card>
+            )}
 
             <ToggleRow
               value={activeInvTab}
