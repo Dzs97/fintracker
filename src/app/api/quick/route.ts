@@ -3,6 +3,7 @@ import { getState, patchState } from "@/lib/state"
 import { nanoid } from "@/lib/utils"
 import { parseEntry } from "@/lib/parseEntry"
 import { getSplits, expandInvestment } from "@/lib/splits"
+import { stampNavs } from "@/lib/stampNav"
 import type { Expense, Income, CCCharge, Investment } from "@/types"
 
 /**
@@ -73,7 +74,7 @@ export async function POST(req: NextRequest) {
         gf: parsed.gf, inv_type: parsed.inv_type,
       }
       const splits = await getSplits()
-      const legs = expandInvestment(base, splits)
+      const legs = await stampNavs(expandInvestment(base, splits))
       entry = legs[0]
       await patchState({ investments: [...state.investments, ...legs] })
       if (legs.length > 1) {

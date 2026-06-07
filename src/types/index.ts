@@ -42,7 +42,8 @@ export interface Investment {
   gf: boolean
   inv_type: InvType
   historical?: boolean
-  purchase_price?: number  // USD at buy time
+  purchase_price?: number  // USD at buy time (stocks)
+  purchase_nav?: number    // MXN per-share NAV at buy time (funds)
 }
 
 export interface StockPrice {

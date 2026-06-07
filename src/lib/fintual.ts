@@ -51,6 +51,53 @@ async function resolveConceptualId(name: string): Promise<{ id: number; canonica
   }
 }
 
+/**
+ * Historical NAV for a specific date (YYYY-MM-DD).
+ * If the exact date isn't in the series (weekend/holiday/before-launch),
+ * the API typically returns []. We retry up to 7 days back so weekend
+ * buys resolve to the prior trading day's NAV.
+ */
+export async function getFintualNavOn(fundName: string, date: string): Promise<{ nav: number; date: string; currency: string } | null> {
+  const meta = await resolveConceptualId(fundName)
+  if (!meta) return null
+  // Find the freshest real_asset id for this conceptual
+  let realId: number | null = null
+  try {
+    const url = `https://fintual.com/api/real_assets?conceptual_asset_id=${meta.id}`
+    const res = await fetch(url, { next: { revalidate: 86400 } })
+    if (res.ok) {
+      const json = await res.json()
+      const arr = json?.data
+      if (Array.isArray(arr) && arr.length > 0) {
+        // Sort by freshest last_day.date and pick top
+        const sorted = [...arr].sort((a, b) =>
+          (b.attributes?.last_day?.date ?? "").localeCompare(a.attributes?.last_day?.date ?? "")
+        )
+        realId = parseInt(sorted[0].id, 10)
+      }
+    }
+  } catch { return null }
+  if (!realId) return null
+
+  // Walk back up to 7 days to handle weekends/holidays
+  const start = new Date(date + "T12:00:00Z")
+  for (let i = 0; i < 8; i++) {
+    const d = new Date(start.getTime() - i * 86400000)
+    const ds = d.toISOString().split("T")[0]
+    try {
+      const url = `https://fintual.com/api/real_assets/${realId}/days?date=${ds}`
+      const res = await fetch(url, { next: { revalidate: 86400 } })
+      if (!res.ok) continue
+      const json = await res.json()
+      const row = json?.data?.[0]?.attributes
+      if (row && typeof row.net_asset_value === "number") {
+        return { nav: row.net_asset_value, date: row.date ?? ds, currency: meta.currency }
+      }
+    } catch { /* try the next day back */ }
+  }
+  return null
+}
+
 export async function getFintualPrice(fundName: string): Promise<FundQuote | null> {
   const meta = await resolveConceptualId(fundName)
   if (!meta) return null

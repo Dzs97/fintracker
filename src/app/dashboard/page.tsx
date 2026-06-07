@@ -175,6 +175,16 @@ export default function Dashboard() {
     invByName[key].cost += i.amount
     if (i.purchase_price) invByName[key].shares += i.amount / (i.purchase_price * FX)
   })
+
+  // Funds: shares = cost_MXN / purchase_nav (NAV is in MXN, so no FX)
+  const fundByName: Record<string, { name: string; gf: boolean; cost: number; shares: number; uncoveredCost: number }> = {}
+  state.investments.filter(i => i.inv_type === "fund").forEach(i => {
+    const key = `${i.name}||${i.gf ? "gf" : "me"}`
+    if (!fundByName[key]) fundByName[key] = { name: i.name, gf: i.gf, cost: 0, shares: 0, uncoveredCost: 0 }
+    fundByName[key].cost += i.amount
+    if (i.purchase_nav && i.purchase_nav > 0) fundByName[key].shares += i.amount / i.purchase_nav
+    else fundByName[key].uncoveredCost += i.amount
+  })
   const bucketTotals: Record<string, number> = {}
   BUCKETS.forEach(b => { bucketTotals[b.id] = state.investments.filter(i => i.gf === b.gf && i.inv_type === b.type).reduce((s, i) => s + i.amount, 0) })
   const assetBreakdown = (gf: boolean, type: "fund" | "stock"): Array<[string, number]> => {
@@ -800,7 +810,7 @@ export default function Dashboard() {
             {activeInvTab === "pl" && (
               <div style={{ marginBottom: 14 }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, gap: 8 }}>
-                  <div style={{ fontSize: 11, color: C.muted }}>Stocks only · prices in USD · set ticker to enable auto-refresh</div>
+                  <div style={{ fontSize: 11, color: C.muted }}>Stocks + funds · set ticker for auto-refresh</div>
                   <button
                     onClick={refreshPrices}
                     disabled={priceBusy || Object.keys(tickers).length === 0}
@@ -917,6 +927,65 @@ export default function Dashboard() {
                       </Card>
                     )
                   })
+                )}
+
+                {/* ── Funds ── */}
+                {Object.keys(fundByName).length > 0 && (
+                  <>
+                    <div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 600, margin: "18px 0 10px" }}>Funds (MXN)</div>
+                    {Object.entries(fundByName).map(([key, { name, gf, cost, shares, uncoveredCost }]) => {
+                      const p = state.prices?.[name]
+                      const cur = p?.price ?? 0   // fund NAV in MXN
+                      const valMXN = shares > 0 ? shares * cur : 0
+                      // P&L only counts cost that has a known purchase_nav
+                      const coveredCost = cost - uncoveredCost
+                      const plMXN = shares > 0 && cur > 0 ? valMXN - coveredCost : 0
+                      const plPct = coveredCost > 0 && shares > 0 && cur > 0 ? (plMXN / coveredCost * 100) : 0
+                      return (
+                        <Card key={key} style={{ padding: "14px 16px", marginBottom: 10 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: cur > 0 ? 12 : 0 }}>
+                            <div style={{
+                              width: 38, height: 38, borderRadius: 11, background: C.purpleDim,
+                              display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                              fontSize: 13, fontWeight: 700, color: C.purple,
+                            }}>{name.slice(0, 2).toUpperCase()}</div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 14, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>
+                                {name}<Tag color={gf ? C.pink : C.purple}>{gf ? "GF" : "Mine"}</Tag>
+                              </div>
+                              <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+                                {shares > 0 ? `${shares.toFixed(4)} shares · ` : ""}Cost {fmt(cost)} MXN
+                                {uncoveredCost > 0 && <span style={{ color: C.dim }}> · {fmt(uncoveredCost)} no NAV</span>}
+                              </div>
+                            </div>
+                            {shares > 0 && cur > 0 && (
+                              <div style={{ textAlign: "right" }}>
+                                <div style={{ fontSize: 15, fontWeight: 700, color: plMXN >= 0 ? C.green : C.red }}>
+                                  {plMXN >= 0 ? "+" : ""}{fmt(plMXN)}
+                                </div>
+                                <div style={{ fontSize: 11, color: plMXN >= 0 ? C.green : C.red, marginTop: 2 }}>
+                                  {plPct >= 0 ? "+" : ""}{plPct.toFixed(2)}%
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                          {cur > 0 && (
+                            <div style={{ display: "flex", gap: 8 }}>
+                              <div style={{ flex: 1, background: C.bg, borderRadius: 12, padding: "10px 12px" }}>
+                                <div style={{ fontSize: 9.5, color: C.muted, marginBottom: 3, letterSpacing: "0.04em" }}>CURRENT NAV</div>
+                                <div style={{ fontSize: 14, fontWeight: 700, color: C.purple }}>{cur.toFixed(4)} MXN</div>
+                                {p?.updatedAt && <div style={{ fontSize: 10, color: C.dim }}>as of {fmtDate(p.updatedAt.split("T")[0])}</div>}
+                              </div>
+                              <div style={{ flex: 1, background: C.bg, borderRadius: 12, padding: "10px 12px" }}>
+                                <div style={{ fontSize: 9.5, color: C.muted, marginBottom: 3, letterSpacing: "0.04em" }}>POSITION VALUE</div>
+                                <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{fmt(valMXN)} MXN</div>
+                              </div>
+                            </div>
+                          )}
+                        </Card>
+                      )
+                    })}
+                  </>
                 )}
               </div>
             )}

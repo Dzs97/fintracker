@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getState, patchState } from "@/lib/state"
 import { getSplits, expandInvestment } from "@/lib/splits"
+import { stampNavs } from "@/lib/stampNav"
 import type { Investment } from "@/types"
 
 export async function GET() {
@@ -12,7 +13,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json()
   const state = await getState()
   const splits = await getSplits()
-  const legs = expandInvestment(body, splits)
+  const legs = await stampNavs(expandInvestment(body, splits))
   await patchState({ investments: [...state.investments, ...legs] })
   return NextResponse.json(legs.length === 1 ? legs[0] : { ok: true, expanded: legs })
 }
