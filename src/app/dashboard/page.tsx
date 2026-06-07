@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useState } from "react"
 import type { AppState } from "@/types"
 import {
-  C, FX, CAT_COLORS, CATS, CC_CARDS, BUCKETS, getBucket,
+  C, FX_FALLBACK, CAT_COLORS, CATS, CC_CARDS, BUCKETS, getBucket,
   expandCC, fmt, fmtDate, today,
 } from "@/lib/utils"
 import { Icon } from "@/components/Icon"
@@ -81,7 +81,7 @@ export default function Dashboard() {
         cc: ccData.cc, settled: ccData.settled,
         investments: invData.investments, prices: invData.prices,
         budgets: budgets.budgets,
-        fxRate: fx.rate ?? FX,
+        fxRate: fx.rate ?? FX_FALLBACK,
       })
     } finally {
       setLoading(false)
@@ -99,6 +99,9 @@ export default function Dashboard() {
       </div>
     )
   }
+
+  // Live FX rate from state (refreshed hourly via /api/fx).
+  const FX = state.fxRate || FX_FALLBACK
 
   /* ── derived: month window ── */
   const { y: vy, m: vm } = viewMonth
@@ -393,7 +396,7 @@ export default function Dashboard() {
                 <span style={{ fontSize: 11.5, color: C.muted }}>CC pool (unpaid)</span>
                 <span style={{ fontSize: 13.5, fontWeight: 700, color: ccWarning ? C.amber : C.text }}>{fmt(ccPoolTotal)} MXN</span>
               </div>
-              <div style={{ fontSize: 10.5, color: C.dim, marginTop: 7 }}>1 USD = $17.30 MXN · fixed</div>
+              <div style={{ fontSize: 10.5, color: C.dim, marginTop: 7 }}>1 USD = ${FX.toFixed(2)} MXN · live</div>
             </Card>
 
             {/* Stat grid */}
@@ -876,14 +879,15 @@ export default function Dashboard() {
                             </div>
                           </div>
                         )}
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        {/* Row 1: ticker mapping + Pull (no overflow risk) */}
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
                           <input
                             type="text" placeholder="Ticker (e.g. NU, AAPL)"
                             defaultValue={tickers[name] ?? ""}
                             autoCapitalize="characters"
                             spellCheck={false}
                             style={{
-                              flex: 1, padding: "10px 12px", fontSize: 13, fontFamily: "inherit",
+                              flex: 1, minWidth: 0, padding: "10px 12px", fontSize: 13, fontFamily: "inherit",
                               border: `1px solid ${C.border}`, borderRadius: 10,
                               background: C.bg, color: C.text, outline: "none", boxSizing: "border-box",
                               textTransform: "uppercase",
@@ -903,7 +907,7 @@ export default function Dashboard() {
                             }}
                             disabled={!tickers[name] || priceBusy}
                             style={{
-                              padding: "10px 12px", fontSize: 11.5, fontWeight: 700,
+                              padding: "10px 14px", fontSize: 11.5, fontWeight: 700,
                               border: "none", borderRadius: 10, cursor: "pointer",
                               background: tickers[name] ? C.blueDim : C.surface,
                               color: tickers[name] ? C.blue : C.dim,
@@ -911,11 +915,15 @@ export default function Dashboard() {
                               opacity: priceBusy ? 0.5 : 1,
                             }}
                           >Pull</button>
+                        </div>
+                        {/* Row 2: manual override (its own line so it doesn't get clipped) */}
+                        <details style={{ fontSize: 11, color: C.muted }}>
+                          <summary style={{ cursor: "pointer", userSelect: "none", padding: "4px 0" }}>Set price manually</summary>
                           <input
-                            type="number" placeholder="Manual USD" min="0" step="0.01"
+                            type="number" placeholder="USD" min="0" step="0.01"
                             style={{
-                              width: 92, padding: "10px 10px", fontSize: 12, fontFamily: "inherit",
-                              border: `1px solid ${C.border}`, borderRadius: 10,
+                              width: "100%", marginTop: 6, padding: "10px 12px", fontSize: 13,
+                              fontFamily: "inherit", border: `1px solid ${C.border}`, borderRadius: 10,
                               background: C.bg, color: C.text, outline: "none", boxSizing: "border-box",
                             }}
                             onBlur={e => {
@@ -923,7 +931,7 @@ export default function Dashboard() {
                               if (!isNaN(v) && v > 0) { updatePrice(name, v); e.currentTarget.value = "" }
                             }}
                           />
-                        </div>
+                        </details>
                       </Card>
                     )
                   })

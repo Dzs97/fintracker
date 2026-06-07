@@ -10,25 +10,41 @@
  */
 import { redis, KEYS } from "./redis"
 import { getFintualNavOn } from "./fintual"
+import { getYahooClose } from "./yahoo"
 import type { Investment } from "@/types"
 
 export async function stampNavs(legs: Investment[]): Promise<Investment[]> {
-  const funds = (await redis.get<Record<string, string>>(KEYS.funds)) ?? {}
-  if (Object.keys(funds).length === 0) return legs
-
-  // Build a case-insensitive lookup of mapped fund names
-  const map = new Map<string, string>()
-  Object.entries(funds).forEach(([name, fund]) => map.set(name.toLowerCase(), fund))
+  const [funds, tickers] = await Promise.all([
+    redis.get<Record<string, string>>(KEYS.funds),
+    redis.get<Record<string, string>>(KEYS.tickers),
+  ])
+  const fundMap = new Map<string, string>()
+  Object.entries(funds ?? {}).forEach(([n, f]) => fundMap.set(n.toLowerCase(), f))
+  const tickerMap = new Map<string, string>()
+  Object.entries(tickers ?? {}).forEach(([n, t]) => tickerMap.set(n.toLowerCase(), t))
 
   return Promise.all(
     legs.map(async leg => {
-      if (leg.inv_type !== "fund") return leg
-      if (typeof leg.purchase_nav === "number") return leg
-      const fund = map.get(leg.name.toLowerCase())
-      if (!fund) return leg
-      const q = await getFintualNavOn(fund, leg.date)
-      if (!q) return leg
-      return { ...leg, purchase_nav: q.nav }
+      // Funds → purchase_nav (MXN per share)
+      if (leg.inv_type === "fund" && typeof leg.purchase_nav !== "number") {
+        const fund = fundMap.get(leg.name.toLowerCase())
+        if (fund) {
+          const q = await getFintualNavOn(fund, leg.date)
+          if (q) return { ...leg, purchase_nav: q.nav }
+        }
+        return leg
+      }
+      // Stocks → purchase_price (USD per share)
+      if (leg.inv_type === "stock" && typeof leg.purchase_price !== "number") {
+        const ticker = tickerMap.get(leg.name.toLowerCase())
+        if (ticker) {
+          const q = await getYahooClose(ticker, leg.date)
+          if (q) return { ...leg, purchase_price: q.price }
+        }
+        return leg
+      }
+      return leg
     })
   )
 }
+

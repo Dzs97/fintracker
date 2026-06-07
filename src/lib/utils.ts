@@ -29,7 +29,9 @@ export const C = {
   pink:      "#EF7D98", pinkDim:  "#2A1018",
 } as const
 
-export const FX = 17.3 // fixed 1 USD = 17.30 MXN
+// Fallback only — runtime should always use state.fxRate from /api/fx
+// (live rate, refreshed hourly, cached in Redis).
+export const FX_FALLBACK = 17.3
 
 export const CAT_COLORS: Record<string, string> = {
   "Food & Dining": "#FF9D68",
