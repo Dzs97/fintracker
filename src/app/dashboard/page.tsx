@@ -1,33 +1,31 @@
 "use client"
 /**
- * Main dashboard — client component that mirrors the artifact UI
- * but backed by the real API. All state lives in Redis via API calls.
+ * FinTracker dashboard — faithful port of the design handoff
+ * (design_handoff_finance_tracker), API-backed via /api/* (Upstash Redis).
  */
-import { useEffect, useState, useCallback } from "react"
+import { useCallback, useEffect, useState } from "react"
 import type { AppState } from "@/types"
-import { fmt, fmtDate, expandCC, CAT_COLORS } from "@/lib/utils"
+import {
+  C, FX, CAT_COLORS, CATS, CC_CARDS, BUCKETS, getBucket,
+  expandCC, fmt, fmtDate, today,
+} from "@/lib/utils"
+import { Icon } from "@/components/Icon"
+import {
+  Card, Tag, BucketTag, Label, Empty, SearchBar, ToggleRow,
+  EntryRow, FormSheet, FAB, MonthNav, inp, lbl,
+} from "@/components/ui"
+import { SparkBar, LineChart, Donut } from "@/components/charts"
 
 const TABS = [
-  { id: "Overview",     icon: "📊" },
-  { id: "Cards",        icon: "💳" },
-  { id: "Expenses",     icon: "🧾" },
-  { id: "Income",       icon: "💵" },
-  { id: "Investments",  icon: "📈" },
-  { id: "Settings",     icon: "⚙️"  },
-]
+  { id: "Overview",    label: "Overview" },
+  { id: "Cards",       label: "Cards" },
+  { id: "Expenses",    label: "Expenses" },
+  { id: "Income",      label: "Income" },
+  { id: "Investments", label: "Invest" },
+] as const
+type TabId = typeof TABS[number]["id"]
 
-const CC_CARDS = ["OpenBank", "Amex", "Invex"] as const
-const CATS = Object.keys(CAT_COLORS)
-const BUCKETS = [
-  { id: "my-fund",  label: "My Funds",  gf: false, type: "fund",  color: "#5B9FFF" },
-  { id: "my-stock", label: "My Stocks", gf: false, type: "stock", color: "#00E5A0" },
-  { id: "gf-fund",  label: "GF Funds",  gf: true,  type: "fund",  color: "#A78BFA" },
-  { id: "gf-stock", label: "GF Stocks", gf: true,  type: "stock", color: "#FF6BAA" },
-]
-
-function today() { return new Date().toISOString().split("T")[0] }
-
-async function api(path: string, method = "GET", body?: unknown) {
+async function api<T = unknown>(path: string, method = "GET", body?: unknown): Promise<T> {
   const res = await fetch(path, {
     method,
     headers: body ? { "Content-Type": "application/json" } : undefined,
@@ -39,62 +37,71 @@ async function api(path: string, method = "GET", body?: unknown) {
 
 export default function Dashboard() {
   const [state, setState] = useState<AppState | null>(null)
-  const [tab, setTab] = useState("Overview")
+  const [tab, setTab] = useState<TabId>("Overview")
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [heroFlash, setHeroFlash] = useState(false)
+  const [showForm, setShowForm] = useState(false)
+  const [quickAdd, setQuickAdd] = useState<null | "expense" | "income" | "cc" | "investment">(null)
+  const [activeInvTab, setActiveInvTab] = useState<"portfolio" | "pl" | "history">("portfolio")
   const [viewMonth, setViewMonth] = useState(() => {
     const n = new Date(); return { y: n.getFullYear(), m: n.getMonth() }
   })
-  const [showForm, setShowForm] = useState(false)
   const [search, setSearch] = useState({ exp: "", inc: "", cc: "", inv: "" })
-  const [activeInvTab, setActiveInvTab] = useState("portfolio")
+
   const [form, setForm] = useState({
     expName: "", expAmt: "", expCat: "Food & Dining", expDate: today(), expNote: "",
     incName: "", incAmt: "", incDate: today(), incNote: "",
-    ccName: "", ccAmt: "", ccDate: today(), ccCat: "Food & Dining", ccCard: "OpenBank", ccInstallments: 1,
-    invName: "", invAmt: "", invDate: today(), invNote: "", invGf: false, invType: "fund",
-    budgetCat: "Food & Dining", budgetLimit: "",
+    ccName: "", ccAmt: "", ccDate: today(), ccCat: "Food & Dining", ccCard: "OpenBank" as (typeof CC_CARDS)[number], ccInstallments: 1,
+    invName: "", invAmt: "", invDate: today(), invNote: "", invGf: false, invType: "fund" as "fund" | "stock",
   })
+  const upd = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) => setForm(f => ({ ...f, [k]: v }))
+
+  const triggerFlash = () => { setHeroFlash(true); setTimeout(() => setHeroFlash(false), 600) }
 
   const load = useCallback(async () => {
     setRefreshing(true)
     try {
       const [entries, ccData, invData, budgets, fx] = await Promise.all([
-        api("/api/entries"),
-        api("/api/cc"),
-        api("/api/investments"),
-        api("/api/budgets"),
-        api("/api/fx"),
+        api<{ expenses: AppState["expenses"]; income: AppState["income"] }>("/api/entries"),
+        api<{ cc: AppState["cc"]; settled: AppState["settled"] }>("/api/cc"),
+        api<{ investments: AppState["investments"]; prices: AppState["prices"] }>("/api/investments"),
+        api<{ budgets: AppState["budgets"] }>("/api/budgets"),
+        api<{ rate: number }>("/api/fx"),
       ])
       setState({
-        expenses:    entries.expenses,
-        income:      entries.income,
-        cc:          ccData.cc,
-        settled:     ccData.settled,
-        investments: invData.investments,
-        prices:      invData.prices,
-        budgets:     budgets.budgets,
-        fxRate:      fx.rate ?? 17.3,
+        expenses: entries.expenses, income: entries.income,
+        cc: ccData.cc, settled: ccData.settled,
+        investments: invData.investments, prices: invData.prices,
+        budgets: budgets.budgets,
+        fxRate: fx.rate ?? FX,
       })
     } finally {
       setLoading(false)
-      setRefreshing(false)
+      setTimeout(() => setRefreshing(false), 600)
     }
   }, [])
 
   useEffect(() => { load() }, [load])
-  useEffect(() => { setShowForm(false) }, [tab])
+  useEffect(() => { setShowForm(false); setQuickAdd(null) }, [tab])
 
   if (loading || !state) {
-    return <div className="flex items-center justify-center min-h-screen text-muted text-sm">Loading…</div>
+    return (
+      <div style={{ padding: "2rem", color: C.muted, background: C.bg, minHeight: "100vh", fontSize: 14 }}>
+        Loading…
+      </div>
+    )
   }
 
-  const FX = state.fxRate
+  /* ── derived: month window ── */
   const { y: vy, m: vm } = viewMonth
   const moName = new Date(vy, vm, 1).toLocaleString("en-US", { month: "long" })
   const isCurrentMonth = () => { const n = new Date(); return n.getFullYear() === vy && n.getMonth() === vm }
   const shiftMonth = (d: number) => { const nd = new Date(vy, vm + d, 1); setViewMonth({ y: nd.getFullYear(), m: nd.getMonth() }) }
   const inMonth = (str: string) => { const [y, m] = str.split("-").map(Number); return y === vy && m - 1 === vm }
+
+  const prevDate = new Date(vy, vm - 1, 1)
+  const inPrevMonth = (str: string) => { const [y, m] = str.split("-").map(Number); return m - 1 === prevDate.getMonth() && y === prevDate.getFullYear() }
 
   const ccExpanded = expandCC(state.cc)
   const monthExp = state.expenses.filter(e => inMonth(e.date))
@@ -105,10 +112,14 @@ export default function Dashboard() {
   const totalExpMXN  = monthExp.reduce((s, e) => s + e.amount, 0)
   const totalIncUSD  = monthInc.reduce((s, e) => s + e.amount, 0)
   const totalIncMXN  = totalIncUSD * FX
-  const totalInvAll  = state.investments.reduce((s, e) => s + e.amount, 0)
+  const totalInvAllTime = state.investments.reduce((s, e) => s + e.amount, 0)
   const monthInvMXN  = monthInv.filter(e => !e.historical).reduce((s, e) => s + e.amount, 0)
   const monthCCTotal = monthCC.reduce((s, e) => s + e.amount, 0)
-  const currentCash  = totalIncMXN - totalExpMXN - monthInvMXN
+
+  const prevIncMXN = state.income.filter(e => inPrevMonth(e.date)).reduce((s, e) => s + e.amount * FX, 0)
+  const prevExpMXN = state.expenses.filter(e => inPrevMonth(e.date)).reduce((s, e) => s + e.amount, 0)
+  const prevInvMXN = state.investments.filter(e => inPrevMonth(e.date) && !e.historical).reduce((s, e) => s + e.amount, 0)
+  const prevCash = prevIncMXN - prevExpMXN - prevInvMXN
 
   const ccPoolByCard: Record<string, number> = {}
   CC_CARDS.forEach(card => {
@@ -116,644 +127,728 @@ export default function Dashboard() {
     ccPoolByCard[card] = Math.max(0, raw - (state.settled[card] ?? 0))
   })
   const ccPoolTotal = Object.values(ccPoolByCard).reduce((s, v) => s + v, 0)
-  const ccWarning   = ccPoolTotal > currentCash * 0.8
+  const currentCash = totalIncMXN - totalExpMXN - monthInvMXN
+  const ccWarning = ccPoolTotal > currentCash * 0.8
+
+  const cashDelta = prevCash === 0 ? null : ((currentCash - prevCash) / Math.abs(prevCash) * 100)
+  const deltaLabel = cashDelta === null ? "" : (cashDelta >= 0 ? "↑" : "↓") + Math.abs(cashDelta).toFixed(0) + "% vs last mo"
+  const deltaColor = cashDelta === null ? C.muted : cashDelta >= 0 ? C.green : C.red
 
   const catTotals: Record<string, number> = {}
   monthExp.forEach(e => { catTotals[e.cat] = (catTotals[e.cat] ?? 0) + e.amount })
   monthCC.forEach(e  => { catTotals[e.cat] = (catTotals[e.cat] ?? 0) + e.amount })
   const catGrand = Object.values(catTotals).reduce((s, v) => s + v, 0)
 
-  const upd = (k: string, v: unknown) => setForm(f => ({ ...f, [k]: v }))
+  const last6 = Array.from({ length: 6 }, (_, i) => {
+    const d = new Date(vy, vm - 5 + i, 1)
+    return { m: d.getMonth(), y: d.getFullYear(), label: d.toLocaleString("en-US", { month: "short" }) }
+  })
+  const incByMonth = last6.map(p => ({
+    label: p.label,
+    v: state.income.filter(e => { const d = new Date(e.date); return d.getMonth() === p.m && d.getFullYear() === p.y })
+      .reduce((s, e) => s + e.amount * FX, 0),
+  }))
+  const expByMonth = last6.map(p => ({
+    label: p.label,
+    v: [...state.expenses, ...ccExpanded]
+      .filter(e => { const d = new Date(e.date); return d.getMonth() === p.m && d.getFullYear() === p.y })
+      .reduce((s, e) => s + e.amount, 0),
+  }))
+  const invCumLine = last6.map(p => ({
+    label: p.label,
+    v: state.investments
+      .filter(e => { const d = new Date(e.date); return d.getFullYear() < p.y || (d.getFullYear() === p.y && d.getMonth() <= p.m) })
+      .reduce((s, e) => s + e.amount, 0),
+  }))
 
+  const invByName: Record<string, { name: string; gf: boolean; cost: number; shares: number }> = {}
+  state.investments.filter(i => i.inv_type === "stock").forEach(i => {
+    const key = `${i.name}||${i.gf ? "gf" : "me"}`
+    if (!invByName[key]) invByName[key] = { name: i.name, gf: i.gf, cost: 0, shares: 0 }
+    invByName[key].cost += i.amount
+    if (i.purchase_price) invByName[key].shares += i.amount / (i.purchase_price * FX)
+  })
+  const bucketTotals: Record<string, number> = {}
+  BUCKETS.forEach(b => { bucketTotals[b.id] = state.investments.filter(i => i.gf === b.gf && i.inv_type === b.type).reduce((s, i) => s + i.amount, 0) })
+  const assetBreakdown = (gf: boolean, type: "fund" | "stock"): Array<[string, number]> => {
+    const map: Record<string, number> = {}
+    state.investments.filter(i => i.gf === gf && i.inv_type === type).forEach(i => { map[i.name] = (map[i.name] ?? 0) + i.amount })
+    return Object.entries(map).sort((a, b) => b[1] - a[1])
+  }
+
+  /* ── mutations ── */
+  const closeForms = () => { setShowForm(false); setQuickAdd(null) }
   const addExpense = async () => {
     if (!form.expName || !form.expAmt) return
     await api("/api/entries", "POST", { type: "expense", name: form.expName, amount: parseFloat(form.expAmt), cat: form.expCat, date: form.expDate || today(), note: form.expNote })
     setForm(f => ({ ...f, expName: "", expAmt: "", expNote: "" }))
-    setShowForm(false); load()
+    closeForms(); triggerFlash(); load()
   }
   const addIncome = async () => {
     if (!form.incName || !form.incAmt) return
     await api("/api/entries", "POST", { type: "income", name: form.incName, amount: parseFloat(form.incAmt), date: form.incDate || today(), note: form.incNote })
     setForm(f => ({ ...f, incName: "", incAmt: "", incNote: "" }))
-    setShowForm(false); load()
+    closeForms(); triggerFlash(); load()
   }
   const addCC = async () => {
     if (!form.ccName || !form.ccAmt) return
     await api("/api/cc", "POST", { name: form.ccName, amount: parseFloat(form.ccAmt), date: form.ccDate || today(), cat: form.ccCat, card: form.ccCard, installments: Number(form.ccInstallments) || 1 })
     setForm(f => ({ ...f, ccName: "", ccAmt: "", ccInstallments: 1 }))
-    setShowForm(false); load()
+    closeForms(); triggerFlash(); load()
   }
   const addInvestment = async () => {
     if (!form.invName || !form.invAmt) return
     await api("/api/investments", "POST", { name: form.invName, amount: parseFloat(form.invAmt), date: form.invDate || today(), note: form.invNote, gf: form.invGf, inv_type: form.invType })
     setForm(f => ({ ...f, invName: "", invAmt: "", invNote: "" }))
-    setShowForm(false); load()
+    closeForms(); triggerFlash(); load()
   }
-  const delEntry = async (type: string, id: string) => {
-    await api("/api/entries", "DELETE", { type, id }); load()
-  }
-  const delCC = async (id: string) => { await api("/api/cc", "DELETE", { id }); load() }
-  const delInv = async (id: string) => { await api("/api/investments", "DELETE", { id }); load() }
-  const settleCard = async (card: string) => { await api("/api/cc", "PATCH", { card }); load() }
+  const delEntry = async (type: "expense" | "income", id: string) => { await api("/api/entries", "DELETE", { type, id }); load() }
+  const delCC    = async (id: string) => { await api("/api/cc", "DELETE", { id }); load() }
+  const delInv   = async (id: string) => { await api("/api/investments", "DELETE", { id }); load() }
+  const settleCard  = async (card: string) => { await api("/api/cc", "PATCH", { card }); triggerFlash(); load() }
   const updatePrice = async (ticker: string, price: number) => { await api("/api/investments", "PATCH", { ticker, price }); load() }
-  const saveBudget = async () => {
-    if (!form.budgetLimit) return
-    await api("/api/budgets", "POST", { cat: form.budgetCat, limitMXN: parseFloat(form.budgetLimit) }); load()
-  }
-  const delBudget = async (cat: string) => { await api("/api/budgets", "DELETE", { cat }); load() }
 
-  const I = (k: string) => `bg-[${CAT_COLORS[k] ?? "#888"}]`
+  const doRefresh = () => { load() }
 
-  // Shared UI atoms
-  const inp = "w-full px-3 py-3 text-sm border border-border rounded-xl bg-surface text-text outline-none mb-2.5 focus:border-hi"
-  const lbl = "text-[10px] text-muted uppercase tracking-widest block mb-1.5"
-
-  const SectionLabel = ({ children }: { children: string }) => (
-    <div className="text-[10px] text-muted uppercase tracking-widest font-medium mb-2.5">{children}</div>
-  )
-
-  const Card = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => (
-    <div className={`bg-card border border-border rounded-2xl p-4 mb-3 ${className}`}>{children}</div>
-  )
-
-  const MonthNav = () => (
-    <div className="flex items-center justify-between bg-surface border border-border rounded-xl px-4 py-2.5 mb-3">
-      <button onClick={() => shiftMonth(-1)} className="text-muted text-xl px-1">‹</button>
-      <span className="text-sm font-semibold">{moName} {vy}</span>
-      <button onClick={() => shiftMonth(1)} disabled={isCurrentMonth()} className="text-muted text-xl px-1 disabled:opacity-30">›</button>
-    </div>
-  )
-
-  const Toggle = ({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: { value: string; label: string }[] }) => (
-    <div className="flex bg-surface border border-border rounded-xl p-0.5 mb-2.5">
-      {options.map(o => (
-        <button key={o.value} onClick={() => onChange(o.value)}
-          className={`flex-1 py-2 text-xs rounded-lg font-medium transition-all ${value === o.value ? "bg-card text-text" : "text-muted"}`}>
-          {o.label}
-        </button>
-      ))}
-    </div>
-  )
-
-  const FormSheet = ({ title, children, onSubmit, label }: { title: string; children: React.ReactNode; onSubmit: () => void; label: string }) => (
-    <div className="bg-surface border border-border rounded-2xl p-4 mb-4">
-      <div className="text-sm font-semibold mb-4">{title}</div>
-      {children}
-      <div className="flex gap-2 mt-2">
-        <button onClick={() => setShowForm(false)} className="flex-1 py-3 text-sm border border-border rounded-xl text-muted">Cancel</button>
-        <button onClick={onSubmit} className="flex-[2] py-3 text-sm font-semibold rounded-xl bg-green text-bg">
-          {label}
-        </button>
+  /* ── inline forms ── */
+  const expenseForm = () => (
+    <FormSheet title="New expense" onSubmit={addExpense} submitLabel="Add expense" onCancel={closeForms} accent={C.red}>
+      <label style={lbl}>Description</label>
+      <input style={inp} value={form.expName} onChange={e => upd("expName", e.target.value)} placeholder="Coffee, rent…" />
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        <div><label style={lbl}>Amount (MXN)</label><input style={inp} type="number" value={form.expAmt} onChange={e => upd("expAmt", e.target.value)} placeholder="0.00" min="0" /></div>
+        <div><label style={lbl}>Date</label><input style={inp} type="date" value={form.expDate} onChange={e => upd("expDate", e.target.value)} /></div>
       </div>
-    </div>
+      <label style={lbl}>Category</label>
+      <select style={inp} value={form.expCat} onChange={e => upd("expCat", e.target.value)}>
+        {CATS.map(c => <option key={c}>{c}</option>)}
+      </select>
+      <label style={lbl}>Note (optional)</label>
+      <input style={inp} value={form.expNote} onChange={e => upd("expNote", e.target.value)} placeholder="Optional" />
+    </FormSheet>
   )
-
-  const FAB = ({ label, onClick, color = "bg-green" }: { label: string; onClick: () => void; color?: string }) => (
-    <div className="sticky bottom-4 flex justify-end mt-3 pointer-events-none">
-      <button onClick={onClick} className={`pointer-events-auto px-5 py-3 text-sm font-semibold rounded-full ${color} text-bg`}>{label}</button>
-    </div>
-  )
-
-  const EntryRow = ({ iconBg, iconEl, name, sub, amount, amtColor, onDel }: { iconBg: string; iconEl: React.ReactNode; name: React.ReactNode; sub: string; amount: string; amtColor: string; onDel?: () => void }) => (
-    <div className="flex items-center gap-3 px-4 py-3.5 border-b border-border last:border-0">
-      <div className="w-9 h-9 rounded-[10px] flex items-center justify-center flex-shrink-0" style={{ background: iconBg }}>{iconEl}</div>
-      <div className="flex-1 min-w-0">
-        <div className="text-sm font-medium truncate">{name}</div>
-        <div className="text-[11px] text-muted mt-0.5">{sub}</div>
+  const incomeForm = () => (
+    <FormSheet title="New income" onSubmit={addIncome} submitLabel="Add income" onCancel={closeForms} accent={C.green}>
+      <label style={lbl}>Source</label>
+      <input style={inp} value={form.incName} onChange={e => upd("incName", e.target.value)} placeholder="Salary, freelance…" />
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        <div><label style={lbl}>Amount (USD)</label><input style={inp} type="number" value={form.incAmt} onChange={e => upd("incAmt", e.target.value)} placeholder="0.00" min="0" /></div>
+        <div><label style={lbl}>Date</label><input style={inp} type="date" value={form.incDate} onChange={e => upd("incDate", e.target.value)} /></div>
       </div>
-      <div className="text-sm font-semibold flex-shrink-0" style={{ color: amtColor }}>{amount}</div>
-      {onDel && <button onClick={onDel} className="text-dim text-lg px-1 leading-none flex-shrink-0">×</button>}
-    </div>
+      <label style={lbl}>Note (optional)</label>
+      <input style={inp} value={form.incNote} onChange={e => upd("incNote", e.target.value)} placeholder="Optional" />
+    </FormSheet>
+  )
+  const ccForm = () => (
+    <FormSheet title="Add card charge" onSubmit={addCC} submitLabel="Add charge" onCancel={closeForms} accent={C.amber}>
+      <label style={lbl}>Description</label>
+      <input style={inp} value={form.ccName} onChange={e => upd("ccName", e.target.value)} placeholder="UberEats, restaurant…" />
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        <div><label style={lbl}>Amount (MXN)</label><input style={inp} type="number" value={form.ccAmt} onChange={e => upd("ccAmt", e.target.value)} placeholder="0.00" min="0" /></div>
+        <div><label style={lbl}>Date</label><input style={inp} type="date" value={form.ccDate} onChange={e => upd("ccDate", e.target.value)} /></div>
+      </div>
+      <label style={lbl}>Card</label>
+      <ToggleRow value={form.ccCard} onChange={v => upd("ccCard", v as (typeof CC_CARDS)[number])} options={CC_CARDS.map(c => ({ value: c, label: c }))} />
+      <label style={lbl}>Installments</label>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+        <input style={{ ...inp, marginBottom: 0, width: 72 }} type="number" min="1" max="48" value={form.ccInstallments} onChange={e => upd("ccInstallments", parseInt(e.target.value) || 1)} />
+        <span style={{ fontSize: 13, color: C.muted }}>
+          {form.ccInstallments > 1 ? `months · ${fmt(parseFloat(form.ccAmt || "0") / form.ccInstallments)}/mo` : "month"}
+        </span>
+      </div>
+      <label style={lbl}>Category</label>
+      <select style={inp} value={form.ccCat} onChange={e => upd("ccCat", e.target.value)}>
+        {CATS.map(c => <option key={c}>{c}</option>)}
+      </select>
+    </FormSheet>
+  )
+  const invForm = () => (
+    <FormSheet title="Log a buy" onSubmit={addInvestment} submitLabel="Log buy" onCancel={closeForms} accent={C.blue}>
+      <label style={lbl}>Asset / fund name</label>
+      <input style={inp} value={form.invName} onChange={e => upd("invName", e.target.value)} placeholder="Nubank, S&P 500…" />
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        <div><label style={lbl}>Amount (MXN)</label><input style={inp} type="number" value={form.invAmt} onChange={e => upd("invAmt", e.target.value)} placeholder="0.00" min="0" /></div>
+        <div><label style={lbl}>Date</label><input style={inp} type="date" value={form.invDate} onChange={e => upd("invDate", e.target.value)} /></div>
+      </div>
+      <label style={lbl}>Type</label>
+      <ToggleRow value={form.invType} onChange={v => upd("invType", v)} options={[{ value: "fund", label: "Fund" }, { value: "stock", label: "Stock" }]} />
+      <label style={lbl}>Account</label>
+      <ToggleRow value={form.invGf ? "gf" : "me"} onChange={v => upd("invGf", v === "gf")} options={[{ value: "me", label: "Mine" }, { value: "gf", label: "GF" }]} />
+      <label style={lbl}>Note (optional)</label>
+      <input style={inp} value={form.invNote} onChange={e => upd("invNote", e.target.value)} placeholder="Optional" />
+    </FormSheet>
   )
 
-  const SearchBar = ({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) => (
-    <div className="relative mb-3">
-      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted text-sm pointer-events-none">🔍</span>
-      <input value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder ?? "Search…"}
-        className="w-full pl-9 pr-8 py-2.5 text-sm border border-border rounded-xl bg-surface text-text outline-none" />
-      {value && <button onClick={() => onChange("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted text-base">×</button>}
-    </div>
-  )
-
-  const Empty = ({ icon, label, sub }: { icon: string; label: string; sub?: string }) => (
-    <div className="text-center py-12">
-      <div className="text-4xl mb-3 opacity-40">{icon}</div>
-      <div className="text-sm font-medium text-muted mb-1">{label}</div>
-      {sub && <div className="text-xs text-dim">{sub}</div>}
-    </div>
-  )
-
-  const BarChart = ({ data, color, height = 60 }: { data: { label: string; v: number }[]; color: string; height?: number }) => {
-    if (!data.length) return null
-    const max = Math.max(...data.map(d => d.v), 1)
-    const W = 280, H = height, gap = 6
-    const bw = Math.max(6, Math.floor((W - gap * (data.length - 1)) / data.length))
-    const gridYs = [0.25, 0.5, 0.75, 1].map(p => Math.round(H - p * H))
-    return (
-      <svg width="100%" viewBox={`0 0 ${W} ${H}`} className="overflow-visible">
-        {gridYs.map(y => <line key={y} x1={0} y1={y} x2={W} y2={y} stroke="#1E1E2E" strokeWidth="1" />)}
-        {data.map((d, i) => {
-          const bh = Math.max(3, Math.round((d.v / max) * H))
-          return <rect key={i} x={i * (bw + gap)} y={H - bh} width={bw} height={bh} rx={3} fill={color} opacity={0.85}><title>{d.label}: {fmt(d.v)}</title></rect>
-        })}
-      </svg>
-    )
-  }
-
-  const last6 = Array.from({ length: 6 }, (_, i) => {
-    const d = new Date(vy, vm - 5 + i, 1)
-    return { m: d.getMonth(), y: d.getFullYear(), label: d.toLocaleString("en-US", { month: "short" }) }
-  })
-  const incByMonth = last6.map(p => ({ label: p.label, v: state.income.filter(e => { const d = new Date(e.date); return d.getMonth() === p.m && d.getFullYear() === p.y }).reduce((s, e) => s + e.amount * FX, 0) }))
-  const expByMonth = last6.map(p => ({ label: p.label, v: [...state.expenses, ...expandCC(state.cc)].filter(e => { const d = new Date(e.date); return d.getMonth() === p.m && d.getFullYear() === p.y }).reduce((s, e) => s + e.amount, 0) }))
-  const invCumLine = last6.map(p => ({ label: p.label, v: state.investments.filter(e => { const d = new Date(e.date); return d.getFullYear() < p.y || (d.getFullYear() === p.y && d.getMonth() <= p.m) }).reduce((s, e) => s + e.amount, 0) }))
+  const PAD: React.CSSProperties = { padding: "16px 14px 8px" }
 
   return (
-    <div className="max-w-lg mx-auto min-h-screen bg-bg">
-
-      {/* Tab bar */}
-      <div className="flex bg-surface border-b border-border sticky top-0 z-20">
-        {TABS.map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)}
-            className={`flex-1 py-3 flex flex-col items-center gap-0.5 text-[9px] uppercase tracking-widest border-b-2 transition-colors ${tab === t.id ? "border-green text-green font-semibold" : "border-transparent text-muted"}`}>
-            <span className="text-lg leading-none">{t.icon}</span>{t.id}
-          </button>
-        ))}
-        <button onClick={load} className={`px-3 border-l border-border text-muted text-lg border-b-2 border-transparent transition-all ${refreshing ? "text-green rotate-180" : ""}`}>↻</button>
+    <div style={{
+      background: C.bg, color: C.text, minHeight: "100vh",
+      display: "flex", flexDirection: "column",
+    }}>
+      {/* ── Tab bar ── */}
+      <div style={{
+        display: "flex", background: C.surface,
+        borderBottom: `1px solid ${C.border}`, alignItems: "stretch", flexShrink: 0,
+        position: "sticky", top: 0, zIndex: 10,
+      }}>
+        {TABS.map(t => {
+          const on = tab === t.id
+          const iconName = t.id === "Investments" ? "invest" : t.id.toLowerCase()
+          return (
+            <button key={t.id} onClick={() => setTab(t.id)} style={{
+              flex: 1, padding: "11px 2px 9px", cursor: "pointer",
+              border: "none",
+              borderBottom: `2px solid ${on ? C.green : "transparent"}`,
+              background: "transparent",
+              display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+              transition: "color .15s",
+            }}>
+              <Icon name={iconName} size={20} color={on ? C.green : C.muted} fill={t.id === "Overview"} />
+              <span style={{ fontSize: 9.5, fontWeight: on ? 700 : 500, color: on ? C.green : C.muted, letterSpacing: "0.02em" }}>{t.label}</span>
+            </button>
+          )
+        })}
+        <button onClick={doRefresh} title="Refresh" style={{
+          padding: "0 13px", border: "none", borderLeft: `1px solid ${C.border}`,
+          background: "transparent", color: refreshing ? C.green : C.muted, cursor: "pointer",
+          flexShrink: 0, transition: "transform .5s, color .3s",
+          transform: refreshing ? "rotate(-180deg)" : "rotate(0deg)",
+          display: "flex", alignItems: "center",
+        }}>
+          <Icon name="refresh" size={18} color={refreshing ? C.green : C.muted} />
+        </button>
       </div>
 
-      {/* ── OVERVIEW ── */}
-      {tab === "Overview" && (
-        <div className="p-3.5">
-          <MonthNav />
+      <div style={{ flex: 1, overflow: "auto", WebkitOverflowScrolling: "touch" }}>
 
-          {ccWarning && (
-            <div className="flex items-center gap-3 bg-[#2E1F0A] border border-amber/30 rounded-xl p-3 mb-3">
-              <span className="text-xl">⚠️</span>
-              <div>
-                <div className="text-sm font-semibold text-amber">CC pool is high</div>
-                <div className="text-xs text-muted">Unpaid cards ({fmt(ccPoolTotal)}) exceed 80% of cash</div>
-              </div>
-            </div>
-          )}
+        {/* ══ OVERVIEW ══ */}
+        {tab === "Overview" && (
+          <div style={PAD}>
+            <MonthNav moName={moName} vy={vy} onPrev={() => shiftMonth(-1)} onNext={() => shiftMonth(1)} atCurrent={isCurrentMonth()} />
 
-          {/* Hero */}
-          <Card className="relative overflow-hidden">
-            <div className="absolute -top-8 -right-8 w-28 h-28 rounded-full opacity-5" style={{ background: currentCash >= 0 ? "#00E5A0" : "#FF5B6B" }} />
-            <div className="text-[10px] text-muted uppercase tracking-widest mb-2">{moName} · Current cash</div>
-            <div className="text-[38px] font-bold tracking-tight leading-none mb-1" style={{ color: currentCash >= 0 ? "#00E5A0" : "#FF5B6B" }}>
-              {fmt(Math.abs(currentCash))}<span className="text-sm font-normal text-muted ml-1.5">MXN</span>
-            </div>
-            <div className="text-xs text-muted">Income − direct expenses − investments</div>
-            <div className="flex justify-between items-center mt-3 pt-3 border-t border-border">
-              <span className="text-xs text-muted">CC pool (unpaid)</span>
-              <span className={`text-sm font-semibold ${ccWarning ? "text-amber" : "text-muted"}`}>{fmt(ccPoolTotal)} MXN</span>
-            </div>
-            <div className="text-[10px] text-dim mt-1.5">1 USD = ${FX.toFixed(2)} MXN · live rate</div>
-          </Card>
-
-          {/* Stats grid */}
-          <div className="grid grid-cols-2 gap-2 mb-3">
-            {[
-              { label: "Income",   val: fmt(totalIncMXN),  sub: `${fmt(totalIncUSD)} USD`, color: "#00E5A0" },
-              { label: "Spent",    val: fmt(totalExpMXN),  sub: `${monthExp.length} items`, color: "#FF5B6B" },
-              { label: "Cards",    val: fmt(monthCCTotal), sub: `${monthCC.length} charges`, color: "#FFB547" },
-              { label: "Invested", val: fmt(monthInvMXN),  sub: `${monthInv.length} buys`, color: "#5B9FFF" },
-            ].map(m => (
-              <div key={m.label} className="bg-card border border-border rounded-2xl p-3">
-                <div className="text-[10px] text-muted uppercase tracking-widest mb-1.5">{m.label}</div>
-                <div className="text-base font-semibold" style={{ color: m.color }}>{m.val}</div>
-                <div className="text-[10px] text-dim mt-1">{m.sub}</div>
-              </div>
-            ))}
-          </div>
-
-          {/* Category breakdown */}
-          {Object.keys(catTotals).length > 0 && (
-            <Card>
-              <SectionLabel>Spending breakdown — direct + cards</SectionLabel>
-              <div className="flex flex-col gap-2">
-                {Object.entries(catTotals).sort((a, b) => b[1] - a[1]).map(([cat, amt]) => {
-                  const pct = Math.round(amt / catGrand * 100)
-                  const budget = state.budgets.find(b => b.cat === cat)
-                  const overBudget = budget && amt > budget.limitMXN
-                  return (
-                    <div key={cat}>
-                      <div className="flex justify-between mb-1">
-                        <span className="text-xs flex items-center gap-1.5">
-                          <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: CAT_COLORS[cat] ?? "#888" }} />
-                          {cat}
-                          {overBudget && <span className="text-[9px] text-red bg-red/10 px-1.5 py-0.5 rounded-full">over budget</span>}
-                        </span>
-                        <span className="text-xs text-muted">{pct}%</span>
-                      </div>
-                      <div className="bg-border rounded-full h-1 overflow-hidden">
-                        <div className="h-full rounded-full" style={{ width: `${pct}%`, background: overBudget ? "#FF5B6B" : (CAT_COLORS[cat] ?? "#888"), transition: "width .4s" }} />
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </Card>
-          )}
-
-          <Card>
-            <SectionLabel>Income — last 6 months (MXN)</SectionLabel>
-            <BarChart data={incByMonth} color="#00E5A0" />
-            <div className="flex justify-between mt-2">{last6.map(p => <span key={p.label} className="text-[9px] text-dim">{p.label}</span>)}</div>
-          </Card>
-          <Card>
-            <SectionLabel>Total spending — last 6 months</SectionLabel>
-            <BarChart data={expByMonth} color="#FF5B6B" />
-            <div className="flex justify-between mt-2">{last6.map(p => <span key={p.label} className="text-[9px] text-dim">{p.label}</span>)}</div>
-          </Card>
-        </div>
-      )}
-
-      {/* ── CARDS ── */}
-      {tab === "Cards" && (
-        <div className="p-3.5">
-          <MonthNav />
-          <Card className="relative overflow-hidden">
-            <div className="absolute -top-5 -right-5 w-24 h-24 rounded-full opacity-5 bg-amber" />
-            <div className="text-[10px] text-muted uppercase tracking-widest mb-1.5">Total unpaid pool</div>
-            <div className="text-[34px] font-bold text-amber tracking-tight leading-none mb-3">{fmt(ccPoolTotal)}<span className="text-sm font-normal text-muted ml-1.5">MXN</span></div>
-            <div className="grid grid-cols-3 gap-2">
-              {CC_CARDS.map(card => {
-                const pool = ccPoolByCard[card] ?? 0
-                return (
-                  <div key={card} className="bg-[#2E1F0A] rounded-xl p-2.5 border border-amber/20">
-                    <div className="text-[9px] text-amber uppercase tracking-widest mb-1">💳 {card}</div>
-                    <div className="text-sm font-semibold">{fmt(pool)}</div>
-                    {pool > 0 && <button onClick={() => settleCard(card)} className="mt-1.5 w-full py-1 text-[10px] font-semibold rounded bg-green/20 text-green">✓ Settle</button>}
-                  </div>
-                )
-              })}
-            </div>
-          </Card>
-
-          {showForm && (
-            <FormSheet title="Add card charge" onSubmit={addCC} label="Add charge">
-              <label className={lbl}>Description</label>
-              <input className={inp} value={form.ccName} onChange={e => upd("ccName", e.target.value)} placeholder="UberEats, restaurant…" />
-              <div className="grid grid-cols-2 gap-2">
-                <div><label className={lbl}>Amount (MXN)</label><input className={inp} type="number" value={form.ccAmt} onChange={e => upd("ccAmt", e.target.value)} placeholder="0.00" /></div>
-                <div><label className={lbl}>Date</label><input className={inp} type="date" value={form.ccDate} onChange={e => upd("ccDate", e.target.value)} /></div>
-              </div>
-              <label className={lbl}>Card</label>
-              <Toggle value={form.ccCard} onChange={v => upd("ccCard", v)} options={CC_CARDS.map(c => ({ value: c, label: c }))} />
-              <label className={lbl}>Installments</label>
-              <div className="flex items-center gap-2 mb-2.5">
-                <input className={`${inp} !w-16 !mb-0`} type="number" min="1" max="48" value={form.ccInstallments} onChange={e => upd("ccInstallments", e.target.value)} />
-                <span className="text-xs text-muted">month{form.ccInstallments > 1 ? "s" : ""}{form.ccInstallments > 1 ? ` → ${fmt(parseFloat(form.ccAmt || "0") / Number(form.ccInstallments))}/mo` : ""}</span>
-              </div>
-              <label className={lbl}>Category</label>
-              <select className={inp} value={form.ccCat} onChange={e => upd("ccCat", e.target.value)}>{CATS.map(c => <option key={c}>{c}</option>)}</select>
-            </FormSheet>
-          )}
-
-          <SearchBar value={search.cc} onChange={v => setSearch(s => ({ ...s, cc: v }))} placeholder="Search charges…" />
-          {(() => {
-            const filtered = monthCC.filter(e => e.name.toLowerCase().includes(search.cc.toLowerCase()))
-            const total = filtered.reduce((s, e) => s + e.amount, 0)
-            return filtered.length === 0
-              ? <Empty icon="💳" label="No charges this month" sub={search.cc ? "Try a different search" : undefined} />
-              : (
-                <>
-                  <div className="bg-card border border-border rounded-2xl overflow-hidden mb-2">
-                    {[...filtered].sort((a, b) => b.date.localeCompare(a.date)).map(e => (
-                      <EntryRow key={e.id}
-                        iconBg="#2E1F0A" iconEl={<div className="w-2.5 h-2.5 rounded-sm bg-amber" />}
-                        name={e.name} sub={`${fmtDate(e.date)} · ${e.card} · ${e.cat}`}
-                        amount={fmt(e.amount)} amtColor="#FFB547"
-                        onDel={"installmentOf" in e ? undefined : () => delCC(e.id)}
-                      />
-                    ))}
-                  </div>
-                  <div className="flex justify-between px-1 text-xs text-muted">
-                    <span>{filtered.length} charge{filtered.length !== 1 ? "s" : ""}</span>
-                    <span className="font-semibold text-amber">{fmt(total)} MXN total</span>
-                  </div>
-                </>
-              )
-          })()}
-          <FAB label={showForm ? "✕ Close" : "+ Add charge"} onClick={() => setShowForm(v => !v)} color="bg-amber" />
-        </div>
-      )}
-
-      {/* ── EXPENSES ── */}
-      {tab === "Expenses" && (
-        <div className="p-3.5">
-          <MonthNav />
-          {showForm && (
-            <FormSheet title="New expense" onSubmit={addExpense} label="Add expense">
-              <label className={lbl}>Description</label>
-              <input className={inp} value={form.expName} onChange={e => upd("expName", e.target.value)} placeholder="Coffee, rent…" />
-              <div className="grid grid-cols-2 gap-2">
-                <div><label className={lbl}>Amount (MXN)</label><input className={inp} type="number" value={form.expAmt} onChange={e => upd("expAmt", e.target.value)} placeholder="0.00" /></div>
-                <div><label className={lbl}>Date</label><input className={inp} type="date" value={form.expDate} onChange={e => upd("expDate", e.target.value)} /></div>
-              </div>
-              <label className={lbl}>Category</label>
-              <select className={inp} value={form.expCat} onChange={e => upd("expCat", e.target.value)}>{CATS.map(c => <option key={c}>{c}</option>)}</select>
-              <label className={lbl}>Note (optional)</label>
-              <input className={inp} value={form.expNote} onChange={e => upd("expNote", e.target.value)} placeholder="DolarApp, notes…" />
-            </FormSheet>
-          )}
-          <div className="flex justify-between items-center bg-card border border-border rounded-xl px-4 py-3 mb-3">
-            <span className="text-xs text-muted">{moName} total</span>
-            <span className="text-lg font-semibold text-red">{fmt(totalExpMXN)} MXN</span>
-          </div>
-          <SearchBar value={search.exp} onChange={v => setSearch(s => ({ ...s, exp: v }))} placeholder="Search expenses…" />
-          {(() => {
-            const filtered = monthExp.filter(e => [e.name, e.cat, e.note ?? ""].join(" ").toLowerCase().includes(search.exp.toLowerCase()))
-            const total = filtered.reduce((s, e) => s + e.amount, 0)
-            return filtered.length === 0
-              ? <Empty icon="🧾" label="No expenses this month" sub={search.exp ? "Try a different search" : "Tap + to add one"} />
-              : (
-                <>
-                  <div className="bg-card border border-border rounded-2xl overflow-hidden mb-2">
-                    {[...filtered].sort((a, b) => b.date.localeCompare(a.date)).map(e => (
-                      <EntryRow key={e.id}
-                        iconBg={(CAT_COLORS[e.cat] ?? "#888") + "22"}
-                        iconEl={<div className="w-2.5 h-2.5 rounded-full" style={{ background: CAT_COLORS[e.cat] ?? "#888" }} />}
-                        name={e.name} sub={`${fmtDate(e.date)} · ${e.cat}${e.note ? ` · ${e.note}` : ""}`}
-                        amount={fmt(e.amount)} amtColor={CAT_COLORS[e.cat] ?? "#FF5B6B"}
-                        onDel={() => delEntry("expense", e.id)}
-                      />
-                    ))}
-                  </div>
-                  <div className="flex justify-between px-1 text-xs text-muted">
-                    <span>{filtered.length} item{filtered.length !== 1 ? "s" : ""}</span>
-                    <span className="font-semibold text-red">{fmt(total)} MXN total</span>
-                  </div>
-                </>
-              )
-          })()}
-          <FAB label={showForm ? "✕ Close" : "+ Add expense"} onClick={() => setShowForm(v => !v)} color="bg-red" />
-        </div>
-      )}
-
-      {/* ── INCOME ── */}
-      {tab === "Income" && (
-        <div className="p-3.5">
-          <MonthNav />
-          {showForm && (
-            <FormSheet title="New income" onSubmit={addIncome} label="Add income">
-              <label className={lbl}>Source</label>
-              <input className={inp} value={form.incName} onChange={e => upd("incName", e.target.value)} placeholder="Salary, freelance…" />
-              <div className="grid grid-cols-2 gap-2">
-                <div><label className={lbl}>Amount (USD)</label><input className={inp} type="number" value={form.incAmt} onChange={e => upd("incAmt", e.target.value)} placeholder="0.00" /></div>
-                <div><label className={lbl}>Date</label><input className={inp} type="date" value={form.incDate} onChange={e => upd("incDate", e.target.value)} /></div>
-              </div>
-              <label className={lbl}>Note (optional)</label>
-              <input className={inp} value={form.incNote} onChange={e => upd("incNote", e.target.value)} placeholder="Optional" />
-            </FormSheet>
-          )}
-          <div className="flex justify-between items-center bg-card border border-border rounded-xl px-4 py-3 mb-3">
-            <span className="text-xs text-muted">{moName} total</span>
-            <div className="text-right">
-              <div className="text-lg font-semibold text-green">{fmt(totalIncUSD)} USD</div>
-              <div className="text-xs text-muted">{fmt(totalIncMXN)} MXN equiv.</div>
-            </div>
-          </div>
-          <SearchBar value={search.inc} onChange={v => setSearch(s => ({ ...s, inc: v }))} placeholder="Search income…" />
-          {(() => {
-            const filtered = monthInc.filter(e => e.name.toLowerCase().includes(search.inc.toLowerCase()))
-            return filtered.length === 0
-              ? <Empty icon="💵" label="No income this month" sub={search.inc ? "Try a different search" : "Tap + to add one"} />
-              : (
-                <div className="bg-card border border-border rounded-2xl overflow-hidden">
-                  {[...filtered].sort((a, b) => b.date.localeCompare(a.date)).map(e => (
-                    <EntryRow key={e.id}
-                      iconBg="#00E5A022" iconEl={<span className="text-green text-base font-bold">↑</span>}
-                      name={e.name} sub={`${fmtDate(e.date)}${e.note ? ` · ${e.note}` : ""}`}
-                      amount={`${fmt(e.amount, 0)} USD`} amtColor="#00E5A0"
-                      onDel={() => delEntry("income", e.id)}
-                    />
-                  ))}
+            {ccWarning && (
+              <div style={{
+                background: C.amberDim, border: `1px solid ${C.amber}55`, borderRadius: 14,
+                padding: "12px 16px", marginBottom: 14, display: "flex", alignItems: "center", gap: 12,
+              }}>
+                <Icon name="warning" size={20} color={C.amber} />
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.amber }}>Card pool is high</div>
+                  <div style={{ fontSize: 11.5, color: C.muted, marginTop: 2 }}>Unpaid cards ({fmt(ccPoolTotal)}) exceed 80% of cash</div>
                 </div>
-              )
-          })()}
-          <FAB label={showForm ? "✕ Close" : "+ Add income"} onClick={() => setShowForm(v => !v)} color="bg-green" />
-        </div>
-      )}
+              </div>
+            )}
 
-      {/* ── INVESTMENTS ── */}
-      {tab === "Investments" && (
-        <div className="p-3.5">
-          <Card className="relative overflow-hidden">
-            <div className="absolute -top-5 -right-5 w-24 h-24 rounded-full opacity-5 bg-blue" />
-            <div className="text-[10px] text-muted uppercase tracking-widest mb-1.5">Total invested · All time</div>
-            <div className="text-[34px] font-bold text-blue tracking-tight leading-none mb-3">{fmt(totalInvAll)}<span className="text-sm font-normal text-muted ml-1.5">MXN</span></div>
-            <div className="grid grid-cols-2 gap-2">
-              {BUCKETS.map(b => {
-                const total = state.investments.filter(i => i.gf === b.gf && i.inv_type === b.type).reduce((s, i) => s + i.amount, 0)
-                return (
-                  <div key={b.id} className="rounded-xl p-2.5 border" style={{ background: b.color + "15", borderColor: b.color + "30" }}>
-                    <div className="text-[9px] uppercase tracking-widest mb-1" style={{ color: b.color }}>{b.label}</div>
-                    <div className="text-sm font-semibold">{fmt(total)}</div>
-                    <div className="text-[10px] text-dim mt-0.5">MXN</div>
-                  </div>
-                )
-              })}
+            {/* Hero */}
+            <Card glow={currentCash >= 0 ? C.green : C.red} style={{
+              background: heroFlash ? C.greenDim : C.card,
+              borderColor: heroFlash ? C.green : C.border,
+              padding: "22px 20px", marginBottom: 14, transition: "background .3s, border-color .3s",
+            }}>
+              <div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10, fontWeight: 600 }}>{moName} · Current cash</div>
+              <div style={{ fontSize: 42, fontWeight: 700, letterSpacing: "-1.5px", color: currentCash >= 0 ? C.green : C.red, lineHeight: 1 }}>
+                {fmt(Math.abs(currentCash))}
+                <span style={{ fontSize: 16, fontWeight: 500, color: C.muted, marginLeft: 7 }}>MXN</span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+                <div style={{ fontSize: 12, color: C.muted }}>Income − expenses − investments</div>
+                {cashDelta !== null && (
+                  <span style={{ fontSize: 11, fontWeight: 700, color: deltaColor, background: deltaColor + "22", padding: "2px 9px", borderRadius: 20 }}>{deltaLabel}</span>
+                )}
+              </div>
+              <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: 11.5, color: C.muted }}>CC pool (unpaid)</span>
+                <span style={{ fontSize: 13.5, fontWeight: 700, color: ccWarning ? C.amber : C.text }}>{fmt(ccPoolTotal)} MXN</span>
+              </div>
+              <div style={{ fontSize: 10.5, color: C.dim, marginTop: 7 }}>1 USD = $17.30 MXN · fixed</div>
+            </Card>
+
+            {/* Stat grid */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
+              {[
+                { label: "Income",   val: fmt(totalIncMXN),  sub: fmt(totalIncUSD) + " USD", color: C.green },
+                { label: "Spent",    val: fmt(totalExpMXN),  sub: monthExp.length + " items", color: C.red },
+                { label: "Cards",    val: fmt(monthCCTotal), sub: monthCC.length + " charge" + (monthCC.length !== 1 ? "s" : ""), color: C.amber },
+                { label: "Invested", val: fmt(monthInvMXN),  sub: monthInv.length + " buy" + (monthInv.length !== 1 ? "s" : ""), color: C.blue },
+              ].map(m => (
+                <div key={m.label} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: "13px 14px" }}>
+                  <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 7, fontWeight: 600 }}>{m.label}</div>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: m.color, letterSpacing: "-0.4px" }}>{m.val}</div>
+                  <div style={{ fontSize: 10.5, color: C.dim, marginTop: 3 }}>{m.sub}</div>
+                </div>
+              ))}
             </div>
-          </Card>
 
-          <Toggle value={activeInvTab} onChange={setActiveInvTab} options={[{ value: "portfolio", label: "Portfolio" }, { value: "pl", label: "P&L" }, { value: "history", label: "History" }]} />
-
-          {activeInvTab === "portfolio" && (
-            <>
-              <Card>
-                <SectionLabel>Cumulative invested</SectionLabel>
-                <BarChart data={invCumLine} color="#5B9FFF" height={70} />
-                <div className="flex justify-between mt-2">{last6.map(p => <span key={p.label} className="text-[9px] text-dim">{p.label}</span>)}</div>
-              </Card>
-              {BUCKETS.map(b => {
-                const assets = Object.entries(
-                  state.investments.filter(i => i.gf === b.gf && i.inv_type === b.type).reduce((map, i) => {
-                    map[i.name] = (map[i.name] ?? 0) + i.amount; return map
-                  }, {} as Record<string, number>)
-                ).sort((a, b) => b[1] - a[1])
-                const total = assets.reduce((s, [, v]) => s + v, 0)
-                if (!assets.length) return null
-                return (
-                  <div key={b.id} className="rounded-2xl p-4 mb-3 border" style={{ background: "#16161F", borderColor: b.color + "44" }}>
-                    <div className="flex justify-between items-center mb-3">
-                      <div className="text-xs font-semibold" style={{ color: b.color }}>{b.label}</div>
-                      <div className="text-sm font-semibold">{fmt(total)} MXN</div>
-                    </div>
-                    {assets.map(([name, amt], i) => {
-                      const pct = Math.round(amt / total * 100)
+            {/* Spending breakdown */}
+            {Object.keys(catTotals).length > 0 && (
+              <Card style={{ padding: 16, marginBottom: 14 }}>
+                <Label>Spending — direct + cards</Label>
+                <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+                  <Donut data={Object.entries(catTotals).map(([k, v]) => ({ label: k, v, color: CAT_COLORS[k] ?? C.muted }))} size={112} />
+                  <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 9, minWidth: 0 }}>
+                    {Object.entries(catTotals).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([cat, amt]) => {
+                      const pct = Math.round(amt / catGrand * 100)
                       return (
-                        <div key={name} className={i < assets.length - 1 ? "mb-3" : ""}>
-                          <div className="flex justify-between mb-1.5">
-                            <span className="text-sm">{name}</span>
-                            <span className="text-xs text-muted">{fmt(amt)} <span className="text-dim">({pct}%)</span></span>
+                        <div key={cat}>
+                          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                            <span style={{ fontSize: 11.5, color: C.text, display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+                              <span style={{ width: 7, height: 7, borderRadius: "50%", background: CAT_COLORS[cat] ?? C.muted, flexShrink: 0 }} />
+                              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cat}</span>
+                            </span>
+                            <span style={{ fontSize: 11.5, color: C.muted, flexShrink: 0, marginLeft: 8 }}>{pct}%</span>
                           </div>
-                          <div className="bg-border rounded-full h-1.5 overflow-hidden">
-                            <div className="h-full rounded-full" style={{ width: `${pct}%`, background: b.color, opacity: 0.8, transition: "width .4s" }} />
+                          <div style={{ background: C.border, borderRadius: 20, height: 4, overflow: "hidden" }}>
+                            <div style={{ width: pct + "%", height: "100%", borderRadius: 20, background: CAT_COLORS[cat] ?? C.muted, transition: "width .4s" }} />
                           </div>
                         </div>
                       )
                     })}
                   </div>
-                )
-              })}
-            </>
-          )}
+                </div>
+              </Card>
+            )}
 
-          {activeInvTab === "pl" && (
-            <div className="mb-3">
-              <div className="text-[10px] text-muted mb-2.5">Stocks only · tap price field to update</div>
-              {(() => {
-                const positions: Record<string, { name: string; gf: boolean; cost: number; shares: number }> = {}
-                state.investments.filter(i => i.inv_type === "stock").forEach(i => {
-                  const key = `${i.name}||${i.gf ? "gf" : "me"}`
-                  if (!positions[key]) positions[key] = { name: i.name, gf: i.gf, cost: 0, shares: 0 }
-                  positions[key].cost += i.amount
-                  if (i.purchase_price) positions[key].shares += i.amount / (i.purchase_price * FX)
-                })
-                return Object.entries(positions).length === 0
-                  ? <Empty icon="📈" label="No stock positions" sub="Log a buy to start" />
-                  : Object.entries(positions).map(([key, { name, gf, cost, shares }]) => {
-                    const p = state.prices[name]
-                    const currentUSD = p?.price ?? 0
-                    const currentValMXN = shares > 0 ? shares * currentUSD * FX : 0
-                    const plMXN = shares > 0 && currentUSD > 0 ? currentValMXN - cost : 0
-                    const plPct = cost > 0 && shares > 0 && currentUSD > 0 ? (plMXN / cost * 100) : 0
+            {/* Mini charts */}
+            <Card style={{ padding: 16, marginBottom: 14 }}>
+              <Label>Income — last 6 months (MXN)</Label>
+              <SparkBar data={incByMonth} color={C.green} />
+              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8 }}>
+                {last6.map(p => <span key={p.label} style={{ fontSize: 9, color: C.dim }}>{p.label}</span>)}
+              </div>
+            </Card>
+            <Card style={{ padding: 16, marginBottom: 14 }}>
+              <Label>Total spending — last 6 months</Label>
+              <SparkBar data={expByMonth} color={C.red} />
+              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8 }}>
+                {last6.map(p => <span key={p.label} style={{ fontSize: 9, color: C.dim }}>{p.label}</span>)}
+              </div>
+            </Card>
+
+            {/* Quick add */}
+            {quickAdd && (
+              <div style={{ marginBottom: 8 }}>
+                {quickAdd === "expense"    && expenseForm()}
+                {quickAdd === "income"     && incomeForm()}
+                {quickAdd === "cc"         && ccForm()}
+                {quickAdd === "investment" && invForm()}
+              </div>
+            )}
+            <div style={{ position: "sticky", bottom: 14, display: "flex", justifyContent: "flex-end", marginTop: 8, pointerEvents: "none" }}>
+              {quickAdd ? (
+                <button onClick={() => setQuickAdd(null)} style={{
+                  pointerEvents: "all", display: "inline-flex", alignItems: "center", gap: 7,
+                  padding: "13px 22px", fontSize: 14, fontFamily: "inherit", fontWeight: 700,
+                  borderRadius: 100, cursor: "pointer", background: C.surface, color: C.muted,
+                  border: `1px solid ${C.border}`,
+                }}>
+                  <Icon name="close" size={16} color={C.muted} />Close
+                </button>
+              ) : (
+                <div style={{ pointerEvents: "all", display: "flex", gap: 8 }}>
+                  {([
+                    { t: "expense" as const,    i: "expenses", c: C.red },
+                    { t: "income" as const,     i: "income",   c: C.green },
+                    { t: "cc" as const,         i: "cards",    c: C.amber },
+                    { t: "investment" as const, i: "invest",   c: C.blue },
+                  ]).map(b => (
+                    <button key={b.t} onClick={() => setQuickAdd(b.t)} style={{
+                      width: 48, height: 48, display: "flex", alignItems: "center", justifyContent: "center",
+                      borderRadius: 100, cursor: "pointer", background: b.c + "1F", color: b.c,
+                      border: `1px solid ${b.c}44`,
+                    }}>
+                      <Icon name={b.i} size={20} color={b.c} />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ══ CARDS ══ */}
+        {tab === "Cards" && (
+          <div style={PAD}>
+            <MonthNav moName={moName} vy={vy} onPrev={() => shiftMonth(-1)} onNext={() => shiftMonth(1)} atCurrent={isCurrentMonth()} />
+
+            <Card glow={C.amber} style={{ padding: 20, marginBottom: 14 }}>
+              <div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8, fontWeight: 600 }}>Total unpaid pool</div>
+              <div style={{ fontSize: 36, fontWeight: 700, color: C.amber, letterSpacing: "-1.2px", lineHeight: 1 }}>
+                {fmt(ccPoolTotal)}<span style={{ fontSize: 16, fontWeight: 500, color: C.muted, marginLeft: 7 }}>MXN</span>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginTop: 16 }}>
+                {CC_CARDS.map(card => {
+                  const pool = ccPoolByCard[card] ?? 0
+                  return (
+                    <div key={card} style={{ background: C.amberDim, borderRadius: 12, padding: 10, border: `1px solid ${C.amber}28` }}>
+                      <div style={{ fontSize: 10, color: C.amber, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 4, fontWeight: 600 }}>{card}</div>
+                      <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{fmt(pool)}</div>
+                      {pool > 0 && (
+                        <button onClick={() => settleCard(card)} style={{
+                          marginTop: 7, width: "100%", padding: "6px 4px", fontSize: 10,
+                          fontFamily: "inherit", fontWeight: 700, border: "none", borderRadius: 8,
+                          cursor: "pointer", background: C.green + "26", color: C.green,
+                          display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 4,
+                        }}>
+                          <Icon name="check" size={12} color={C.green} />Settle
+                        </button>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </Card>
+
+            {showForm && ccForm()}
+
+            {/* Category breakdown */}
+            {monthCC.length > 0 && (() => {
+              const ct: Record<string, number> = {}
+              monthCC.forEach(e => { ct[e.cat] = (ct[e.cat] ?? 0) + e.amount })
+              const tot = Object.values(ct).reduce((s, v) => s + v, 0)
+              return (
+                <Card style={{ padding: 16, marginBottom: 14 }}>
+                  <Label>This month by category</Label>
+                  {Object.entries(ct).sort((a, b) => b[1] - a[1]).map(([cat, amt]) => {
+                    const pct = Math.round(amt / tot * 100)
                     return (
-                      <div key={key} className="bg-card border border-border rounded-2xl p-4 mb-2.5">
-                        <div className="flex items-center gap-3 mb-3">
-                          <div className="w-9 h-9 rounded-[10px] bg-[#0A1A2E] flex items-center justify-center text-blue text-xs font-bold">{name.slice(0, 2).toUpperCase()}</div>
-                          <div className="flex-1">
-                            <div className="text-sm font-semibold flex items-center gap-1.5">
-                              {name}
-                              <span className="text-[9px] px-1.5 py-0.5 rounded-full font-semibold" style={{ background: gf ? "#A78BFA28" : "#5B9FFF28", color: gf ? "#A78BFA" : "#5B9FFF" }}>{gf ? "GF" : "Mine"}</span>
-                            </div>
-                            <div className="text-[11px] text-muted mt-0.5">{shares > 0 ? `${shares.toFixed(4)} shares · ` : ""}Cost: {fmt(cost)} MXN</div>
-                          </div>
-                          {shares > 0 && currentUSD > 0 && (
-                            <div className="text-right">
-                              <div className="text-sm font-bold" style={{ color: plMXN >= 0 ? "#00E5A0" : "#FF5B6B" }}>{plMXN >= 0 ? "+" : ""}{fmt(plMXN)}</div>
-                              <div className="text-[11px]" style={{ color: plMXN >= 0 ? "#00E5A0" : "#FF5B6B" }}>{plPct >= 0 ? "+" : ""}{plPct.toFixed(1)}%</div>
-                            </div>
-                          )}
+                      <div key={cat} style={{ marginBottom: 10 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                          <span style={{ fontSize: 12, color: C.text, display: "flex", alignItems: "center", gap: 6 }}>
+                            <span style={{ width: 7, height: 7, borderRadius: "50%", background: CAT_COLORS[cat] ?? C.muted }} />{cat}
+                          </span>
+                          <span style={{ fontSize: 12, color: C.muted }}>
+                            {fmt(amt)} <span style={{ fontSize: 10, color: C.dim }}>({pct}%)</span>
+                          </span>
                         </div>
-                        {currentUSD > 0 && (
-                          <div className="grid grid-cols-2 gap-2 mb-3">
-                            <div className="bg-surface rounded-xl p-2.5">
-                              <div className="text-[9px] text-muted mb-1">CURRENT PRICE</div>
-                              <div className="text-sm font-semibold text-blue">${currentUSD.toFixed(2)} USD</div>
-                              <div className="text-[10px] text-dim">{fmt(currentUSD * FX)} MXN</div>
-                            </div>
-                            <div className="bg-surface rounded-xl p-2.5">
-                              <div className="text-[9px] text-muted mb-1">POSITION VALUE</div>
-                              <div className="text-sm font-semibold">{fmt(currentValMXN)} MXN</div>
-                              {p?.updatedAt && <div className="text-[10px] text-dim">{fmtDate(p.updatedAt.split("T")[0])}</div>}
-                            </div>
-                          </div>
-                        )}
-                        <div className="flex items-center gap-2">
-                          <input type="number" placeholder="Update price (USD)" min="0" step="0.01" defaultValue={currentUSD || ""}
-                            className="flex-1 px-3 py-2 text-sm border border-border rounded-lg bg-surface text-text outline-none"
-                            onBlur={e => { const v = parseFloat(e.target.value); if (!isNaN(v) && v > 0) updatePrice(name, v) }} />
-                          <span className="text-xs text-muted">USD</span>
+                        <div style={{ background: C.border, borderRadius: 20, height: 4, overflow: "hidden" }}>
+                          <div style={{ width: pct + "%", height: "100%", borderRadius: 20, background: CAT_COLORS[cat] ?? C.muted, transition: "width .4s" }} />
                         </div>
                       </div>
                     )
-                  })
-              })()}
-            </div>
-          )}
+                  })}
+                </Card>
+              )
+            })()}
 
-          {activeInvTab === "history" && (
-            <>
-              <SearchBar value={search.inv} onChange={v => setSearch(s => ({ ...s, inv: v }))} placeholder="Search investments…" />
-              {(() => {
-                const filtered = state.investments.filter(e => e.name.toLowerCase().includes(search.inv.toLowerCase()))
-                return filtered.length === 0
-                  ? <Empty icon="📈" label="No investments" sub="Log a buy to start" />
-                  : (
-                    <div className="bg-card border border-border rounded-2xl overflow-hidden mb-3">
-                      {[...filtered].sort((a, b) => b.date.localeCompare(a.date)).map(e => {
-                        const b = BUCKETS.find(bk => bk.gf === e.gf && bk.type === e.inv_type) ?? BUCKETS[1]
+            <SearchBar value={search.cc} onChange={v => setSearch(s => ({ ...s, cc: v }))} placeholder="Search charges…" />
+            {(() => {
+              const filtered = monthCC.filter(e => e.name.toLowerCase().includes(search.cc.toLowerCase()))
+              const ft = filtered.reduce((s, e) => s + e.amount, 0)
+              return filtered.length === 0 ? (
+                <Empty icon="cards" label="No charges this month" sub={search.cc ? "Try a different search" : undefined} />
+              ) : (
+                <>
+                  <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, overflow: "hidden", marginBottom: 8 }}>
+                    {[...filtered].sort((a, b) => b.date.localeCompare(a.date)).map((e, i, arr) => {
+                      const sourceCc = state.cc.find(x => x.id === e.installmentOf)
+                      return (
+                        <EntryRow
+                          key={e.id}
+                          isLast={i === arr.length - 1}
+                          icon={<div style={{ width: 11, height: 11, borderRadius: 3, background: CAT_COLORS[e.cat] ?? C.amber }} />}
+                          iconBg={(CAT_COLORS[e.cat] ?? C.amber) + "22"}
+                          name={
+                            <>
+                              {e.name}
+                              {e.installmentOf && (
+                                <span style={{ fontSize: 10, color: C.muted, marginLeft: 6 }}>
+                                  ({e.installmentN}/{sourceCc?.installments ?? "?"})
+                                </span>
+                              )}
+                            </>
+                          }
+                          sub={`${fmtDate(e.date)} · ${e.card} · ${e.cat}`}
+                          amount={fmt(e.amount)}
+                          amtColor={C.amber}
+                          onDel={!e.installmentOf ? () => delCC(e.id) : null}
+                        />
+                      )
+                    })}
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 4px", fontSize: 12, color: C.muted }}>
+                    <span>{filtered.length} charge{filtered.length !== 1 ? "s" : ""}</span>
+                    <span style={{ fontWeight: 700, color: C.amber }}>{fmt(ft)} MXN total</span>
+                  </div>
+                </>
+              )
+            })()}
+            <FAB label={showForm ? "Close" : "Add charge"} icon={showForm ? "close" : "plus"} onClick={() => setShowForm(v => !v)} color={C.amber} ghost={showForm} />
+          </div>
+        )}
+
+        {/* ══ EXPENSES ══ */}
+        {tab === "Expenses" && (
+          <div style={PAD}>
+            <MonthNav moName={moName} vy={vy} onPrev={() => shiftMonth(-1)} onNext={() => shiftMonth(1)} atCurrent={isCurrentMonth()} />
+            {showForm && expenseForm()}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: "13px 16px", marginBottom: 14 }}>
+              <span style={{ fontSize: 12, color: C.muted }}>{moName} total</span>
+              <span style={{ fontSize: 19, fontWeight: 700, color: C.red, letterSpacing: "-0.4px" }}>{fmt(totalExpMXN)} MXN</span>
+            </div>
+            <SearchBar value={search.exp} onChange={v => setSearch(s => ({ ...s, exp: v }))} placeholder="Search expenses…" />
+            {(() => {
+              const q = search.exp.toLowerCase()
+              const filtered = monthExp.filter(e =>
+                e.name.toLowerCase().includes(q) ||
+                e.cat.toLowerCase().includes(q) ||
+                (e.note ?? "").toLowerCase().includes(q)
+              )
+              const ft = filtered.reduce((s, e) => s + e.amount, 0)
+              return filtered.length === 0 ? (
+                <Empty icon="expenses" label="No expenses this month" sub={search.exp ? "Try a different search" : "Tap + to add one"} />
+              ) : (
+                <>
+                  <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, overflow: "hidden", marginBottom: 8 }}>
+                    {[...filtered].sort((a, b) => b.date.localeCompare(a.date)).map((e, i, arr) => (
+                      <EntryRow
+                        key={e.id}
+                        isLast={i === arr.length - 1}
+                        icon={<div style={{ width: 11, height: 11, borderRadius: "50%", background: CAT_COLORS[e.cat] ?? C.muted }} />}
+                        iconBg={(CAT_COLORS[e.cat] ?? C.muted) + "22"}
+                        name={e.name}
+                        sub={`${fmtDate(e.date)} · ${e.cat}${e.note ? ` · ${e.note}` : ""}`}
+                        amount={fmt(e.amount)}
+                        amtColor={CAT_COLORS[e.cat] ?? C.red}
+                        onDel={() => delEntry("expense", e.id)}
+                      />
+                    ))}
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 4px", fontSize: 12, color: C.muted }}>
+                    <span>{filtered.length} item{filtered.length !== 1 ? "s" : ""}</span>
+                    <span style={{ fontWeight: 700, color: C.red }}>{fmt(ft)} MXN total</span>
+                  </div>
+                </>
+              )
+            })()}
+            <FAB label={showForm ? "Close" : "Add expense"} icon={showForm ? "close" : "plus"} onClick={() => setShowForm(v => !v)} color={C.red} ghost={showForm} />
+          </div>
+        )}
+
+        {/* ══ INCOME ══ */}
+        {tab === "Income" && (
+          <div style={PAD}>
+            <MonthNav moName={moName} vy={vy} onPrev={() => shiftMonth(-1)} onNext={() => shiftMonth(1)} atCurrent={isCurrentMonth()} />
+            {showForm && incomeForm()}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: "13px 16px", marginBottom: 14 }}>
+              <span style={{ fontSize: 12, color: C.muted }}>{moName} total</span>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontSize: 19, fontWeight: 700, color: C.green, letterSpacing: "-0.4px" }}>{fmt(totalIncUSD)} USD</div>
+                <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{fmt(totalIncMXN)} MXN equiv.</div>
+              </div>
+            </div>
+            <SearchBar value={search.inc} onChange={v => setSearch(s => ({ ...s, inc: v }))} placeholder="Search income…" />
+            {(() => {
+              const filtered = monthInc.filter(e => e.name.toLowerCase().includes(search.inc.toLowerCase()))
+              return filtered.length === 0 ? (
+                <Empty icon="income" label="No income this month" sub={search.inc ? "Try a different search" : "Tap + to add one"} />
+              ) : (
+                <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, overflow: "hidden" }}>
+                  {[...filtered].sort((a, b) => b.date.localeCompare(a.date)).map((e, i, arr) => (
+                    <EntryRow
+                      key={e.id}
+                      isLast={i === arr.length - 1}
+                      icon={<Icon name="income" size={18} color={C.green} />}
+                      iconBg={C.green + "22"}
+                      name={e.name}
+                      sub={`${fmtDate(e.date)}${e.note ? ` · ${e.note}` : ""}`}
+                      amount={fmt(e.amount) + " USD"}
+                      amtColor={C.green}
+                      onDel={() => delEntry("income", e.id)}
+                      rightExtra={<div style={{ fontSize: 11, color: C.muted, textAlign: "right", marginRight: 4 }}>{fmt(e.amount * FX)} MXN</div>}
+                    />
+                  ))}
+                </div>
+              )
+            })()}
+            <FAB label={showForm ? "Close" : "Add income"} icon={showForm ? "close" : "plus"} onClick={() => setShowForm(v => !v)} color={C.green} ghost={showForm} />
+          </div>
+        )}
+
+        {/* ══ INVESTMENTS ══ */}
+        {tab === "Investments" && (
+          <div style={PAD}>
+            <Card glow={C.blue} style={{ padding: 20, marginBottom: 14 }}>
+              <div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8, fontWeight: 600 }}>Total invested · all time</div>
+              <div style={{ fontSize: 36, fontWeight: 700, color: C.blue, letterSpacing: "-1.2px", lineHeight: 1 }}>
+                {fmt(totalInvAllTime)}<span style={{ fontSize: 16, fontWeight: 500, color: C.muted, marginLeft: 7 }}>MXN</span>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 16 }}>
+                {BUCKETS.map(b => (
+                  <div key={b.id} style={{ background: b.dim, borderRadius: 12, padding: "10px 12px", border: `1px solid ${b.color}28` }}>
+                    <div style={{ fontSize: 10, color: b.color, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 4, fontWeight: 600 }}>{b.label}</div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: C.text }}>{fmt(bucketTotals[b.id])}</div>
+                    <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>MXN</div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+
+            <ToggleRow
+              value={activeInvTab}
+              onChange={setActiveInvTab}
+              options={[{ value: "portfolio", label: "Portfolio" }, { value: "pl", label: "P&L" }, { value: "history", label: "History" }]}
+            />
+
+            {activeInvTab === "portfolio" && (
+              <>
+                <Card style={{ padding: 16, marginBottom: 14 }}>
+                  <Label>Cumulative invested</Label>
+                  <LineChart points={invCumLine} color={C.blue} />
+                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
+                    {last6.map(p => <span key={p.label} style={{ fontSize: 9, color: C.dim }}>{p.label}</span>)}
+                  </div>
+                </Card>
+                {BUCKETS.map(b => {
+                  const assets = assetBreakdown(b.gf, b.type)
+                  const total = bucketTotals[b.id]
+                  if (!assets.length) return null
+                  return (
+                    <Card key={b.id} style={{ padding: 16, marginBottom: 12, borderColor: b.color + "33" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                        <div style={{ fontSize: 12.5, fontWeight: 700, color: b.color }}>{b.label}</div>
+                        <div style={{ fontSize: 13.5, fontWeight: 700, color: C.text }}>{fmt(total)} MXN</div>
+                      </div>
+                      {assets.map(([name, amt], i) => {
+                        const pct = Math.round(amt / total * 100)
                         return (
-                          <EntryRow key={e.id}
-                            iconBg={b.color + "22"} iconEl={<span style={{ color: b.color }}>◆</span>}
-                            name={<span className="flex items-center gap-1.5">{e.name} <span className="text-[9px] px-1.5 py-0.5 rounded-full font-semibold" style={{ background: b.color + "28", color: b.color }}>{b.label}</span>{e.historical && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-dim text-muted">historical</span>}</span>}
+                          <div key={name} style={{ marginBottom: i < assets.length - 1 ? 12 : 0 }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
+                              <span style={{ fontSize: 13, color: C.text }}>{name}</span>
+                              <span style={{ fontSize: 12, color: C.muted }}>
+                                {fmt(amt)} <span style={{ fontSize: 10, color: C.dim }}>({pct}%)</span>
+                              </span>
+                            </div>
+                            <div style={{ background: C.border, borderRadius: 20, height: 5, overflow: "hidden" }}>
+                              <div style={{ width: pct + "%", height: "100%", borderRadius: 20, background: b.color, opacity: 0.85, transition: "width .4s" }} />
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </Card>
+                  )
+                })}
+              </>
+            )}
+
+            {activeInvTab === "pl" && (
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ fontSize: 11, color: C.muted, marginBottom: 10 }}>Stocks only · prices in USD · tap field to update</div>
+                {Object.entries(invByName).length === 0 ? (
+                  <Empty icon="invest" label="No stock positions yet" sub="Log a buy to start tracking" />
+                ) : (
+                  Object.entries(invByName).map(([key, { name, gf, cost, shares }]) => {
+                    const p = state.prices?.[name]
+                    const cur = p?.price ?? 0
+                    const valMXN = shares > 0 ? shares * cur * FX : 0
+                    const plMXN = shares > 0 && cur > 0 ? valMXN - cost : 0
+                    const plPct = cost > 0 && shares > 0 && cur > 0 ? (plMXN / cost * 100) : 0
+                    return (
+                      <Card key={key} style={{ padding: "14px 16px", marginBottom: 10 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: cur > 0 ? 12 : 0 }}>
+                          <div style={{
+                            width: 38, height: 38, borderRadius: 11, background: C.blueDim,
+                            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                            fontSize: 13, fontWeight: 700, color: C.blue,
+                          }}>{name.slice(0, 2).toUpperCase()}</div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 14, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>
+                              {name}<Tag color={gf ? C.purple : C.blue}>{gf ? "GF" : "Mine"}</Tag>
+                            </div>
+                            <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+                              {shares > 0 ? `${shares.toFixed(4)} shares · ` : ""}Cost {fmt(cost)} MXN
+                            </div>
+                          </div>
+                          {shares > 0 && cur > 0 && (
+                            <div style={{ textAlign: "right" }}>
+                              <div style={{ fontSize: 15, fontWeight: 700, color: plMXN >= 0 ? C.green : C.red }}>
+                                {plMXN >= 0 ? "+" : ""}{fmt(plMXN)}
+                              </div>
+                              <div style={{ fontSize: 11, color: plMXN >= 0 ? C.green : C.red, marginTop: 2 }}>
+                                {plPct >= 0 ? "+" : ""}{plPct.toFixed(1)}%
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                        {cur > 0 && (
+                          <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+                            <div style={{ flex: 1, background: C.bg, borderRadius: 12, padding: "10px 12px" }}>
+                              <div style={{ fontSize: 9.5, color: C.muted, marginBottom: 3, letterSpacing: "0.04em" }}>CURRENT PRICE</div>
+                              <div style={{ fontSize: 14, fontWeight: 700, color: C.blue }}>${cur.toFixed(2)}</div>
+                              <div style={{ fontSize: 10, color: C.dim }}>{fmt(cur * FX)} MXN</div>
+                            </div>
+                            <div style={{ flex: 1, background: C.bg, borderRadius: 12, padding: "10px 12px" }}>
+                              <div style={{ fontSize: 9.5, color: C.muted, marginBottom: 3, letterSpacing: "0.04em" }}>POSITION VALUE</div>
+                              <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{fmt(valMXN)} MXN</div>
+                              {p?.updatedAt && <div style={{ fontSize: 10, color: C.dim }}>as of {fmtDate(p.updatedAt.split("T")[0])}</div>}
+                            </div>
+                          </div>
+                        )}
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <input
+                            type="number" placeholder="Update price (USD)" min="0" step="0.01"
+                            defaultValue={cur || ""}
+                            style={{
+                              flex: 1, padding: "10px 12px", fontSize: 13, fontFamily: "inherit",
+                              border: `1px solid ${C.border}`, borderRadius: 10,
+                              background: C.bg, color: C.text, outline: "none", boxSizing: "border-box",
+                            }}
+                            onBlur={e => {
+                              const v = parseFloat(e.target.value)
+                              if (!isNaN(v) && v > 0) updatePrice(name, v)
+                            }}
+                          />
+                          <span style={{ fontSize: 12, color: C.muted, flexShrink: 0 }}>USD</span>
+                        </div>
+                      </Card>
+                    )
+                  })
+                )}
+              </div>
+            )}
+
+            {activeInvTab === "history" && (
+              <>
+                <SearchBar value={search.inv} onChange={v => setSearch(s => ({ ...s, inv: v }))} placeholder="Search investments…" />
+                {(() => {
+                  const filtered = state.investments.filter(e => e.name.toLowerCase().includes(search.inv.toLowerCase()))
+                  return filtered.length === 0 ? (
+                    <Empty icon="invest" label="No investments logged yet" sub={search.inv ? "Try a different search" : "Log a buy to start"} />
+                  ) : (
+                    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, overflow: "hidden", marginBottom: 14 }}>
+                      {[...filtered].sort((a, b) => b.date.localeCompare(a.date)).map((e, i, arr) => {
+                        const bucket = getBucket(e)
+                        return (
+                          <EntryRow
+                            key={e.id}
+                            isLast={i === arr.length - 1}
+                            icon={<div style={{ width: 11, height: 11, borderRadius: e.inv_type === "stock" ? 3 : "50%", background: bucket.color }} />}
+                            iconBg={bucket.dim}
+                            name={
+                              <span style={{ display: "inline-flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                                {e.name}<BucketTag bucket={bucket} />
+                                {e.historical && <Tag color={C.dim}>historical</Tag>}
+                              </span>
+                            }
                             sub={`${fmtDate(e.date)}${e.note ? ` · ${e.note}` : ""}`}
-                            amount={fmt(e.amount)} amtColor={b.color}
+                            amount={fmt(e.amount)}
+                            amtColor={bucket.color}
                             onDel={() => delInv(e.id)}
                           />
                         )
                       })}
                     </div>
                   )
-              })()}
-            </>
-          )}
+                })()}
+              </>
+            )}
 
-          {showForm && <div className="mt-3">
-            <FormSheet title="Log a buy" onSubmit={addInvestment} label="Log buy">
-              <label className={lbl}>Asset / fund name</label>
-              <input className={inp} value={form.invName} onChange={e => upd("invName", e.target.value)} placeholder="Nubank, Fintual, S&P500…" />
-              <div className="grid grid-cols-2 gap-2">
-                <div><label className={lbl}>Amount (MXN)</label><input className={inp} type="number" value={form.invAmt} onChange={e => upd("invAmt", e.target.value)} placeholder="0.00" /></div>
-                <div><label className={lbl}>Date</label><input className={inp} type="date" value={form.invDate} onChange={e => upd("invDate", e.target.value)} /></div>
-              </div>
-              <label className={lbl}>Type</label>
-              <Toggle value={form.invType} onChange={v => upd("invType", v)} options={[{ value: "fund", label: "Fund" }, { value: "stock", label: "Stock" }]} />
-              <label className={lbl}>Account</label>
-              <Toggle value={form.invGf ? "gf" : "me"} onChange={v => upd("invGf", v === "gf")} options={[{ value: "me", label: "Mine" }, { value: "gf", label: "GF" }]} />
-              <label className={lbl}>Note (optional)</label>
-              <input className={inp} value={form.invNote} onChange={e => upd("invNote", e.target.value)} placeholder="Optional" />
-            </FormSheet>
-          </div>}
-          <FAB label={showForm ? "✕ Close" : "+ Log buy"} onClick={() => setShowForm(v => !v)} color="bg-blue" />
-        </div>
-      )}
+            {showForm && <div style={{ marginTop: 14 }}>{invForm()}</div>}
+            <FAB label={showForm ? "Close" : "Log buy"} icon={showForm ? "close" : "plus"} onClick={() => setShowForm(v => !v)} color={C.blue} ghost={showForm} />
+          </div>
+        )}
 
-      {/* ── SETTINGS ── */}
-      {tab === "Settings" && (
-        <div className="p-3.5">
-          <Card>
-            <SectionLabel>Monthly budgets</SectionLabel>
-            {state.budgets.length === 0
-              ? <div className="text-xs text-dim mb-3">No budgets set</div>
-              : state.budgets.map(b => (
-                <div key={b.cat} className="flex justify-between items-center py-2 border-b border-border last:border-0">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full" style={{ background: CAT_COLORS[b.cat] ?? "#888" }} />
-                    <span className="text-sm">{b.cat}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold">{fmt(b.limitMXN)}</span>
-                    <button onClick={() => delBudget(b.cat)} className="text-dim text-base">×</button>
-                  </div>
-                </div>
-              ))
-            }
-            <div className="mt-3 pt-3 border-t border-border">
-              <label className={lbl}>Category</label>
-              <select className={inp} value={form.budgetCat} onChange={e => upd("budgetCat", e.target.value)}>{CATS.map(c => <option key={c}>{c}</option>)}</select>
-              <label className={lbl}>Monthly limit (MXN)</label>
-              <input className={inp} type="number" value={form.budgetLimit} onChange={e => upd("budgetLimit", e.target.value)} placeholder="0.00" />
-              <button onClick={saveBudget} className="w-full py-3 text-sm font-semibold rounded-xl bg-green text-bg">Set budget</button>
-            </div>
-          </Card>
-
-          <Card>
-            <SectionLabel>Export</SectionLabel>
-            <a href="/api/export" download className="block w-full py-3 text-sm font-semibold rounded-xl bg-surface border border-border text-center text-text">⬇ Download CSV</a>
-          </Card>
-
-          <Card>
-            <SectionLabel>Exchange rate</SectionLabel>
-            <div className="text-sm">1 USD = <span className="font-semibold text-green">${state.fxRate.toFixed(2)} MXN</span></div>
-            <div className="text-xs text-muted mt-1">Auto-refreshes hourly via open.er-api.com</div>
-          </Card>
-        </div>
-      )}
+      </div>
     </div>
   )
 }
