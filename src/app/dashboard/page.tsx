@@ -44,6 +44,8 @@ export default function Dashboard() {
   const [showForm, setShowForm] = useState(false)
   const [quickAdd, setQuickAdd] = useState<null | "expense" | "income" | "cc" | "investment">(null)
   const [activeInvTab, setActiveInvTab] = useState<"portfolio" | "pl" | "history">("portfolio")
+  const [tickers, setTickers] = useState<Record<string, string>>({})
+  const [priceBusy, setPriceBusy] = useState(false)
   const [viewMonth, setViewMonth] = useState(() => {
     const n = new Date(); return { y: n.getFullYear(), m: n.getMonth() }
   })
@@ -62,13 +64,15 @@ export default function Dashboard() {
   const load = useCallback(async () => {
     setRefreshing(true)
     try {
-      const [entries, ccData, invData, budgets, fx] = await Promise.all([
+      const [entries, ccData, invData, budgets, fx, tickerData] = await Promise.all([
         api<{ expenses: AppState["expenses"]; income: AppState["income"] }>("/api/entries"),
         api<{ cc: AppState["cc"]; settled: AppState["settled"] }>("/api/cc"),
         api<{ investments: AppState["investments"]; prices: AppState["prices"] }>("/api/investments"),
         api<{ budgets: AppState["budgets"] }>("/api/budgets"),
         api<{ rate: number }>("/api/fx"),
+        api<{ tickers: Record<string, string> }>("/api/prices"),
       ])
+      setTickers(tickerData.tickers ?? {})
       setState({
         expenses: entries.expenses, income: entries.income,
         cc: ccData.cc, settled: ccData.settled,
@@ -207,6 +211,19 @@ export default function Dashboard() {
   const delInv   = async (id: string) => { await api("/api/investments", "DELETE", { id }); load() }
   const settleCard  = async (card: string) => { await api("/api/cc", "PATCH", { card }); triggerFlash(); load() }
   const updatePrice = async (ticker: string, price: number) => { await api("/api/investments", "PATCH", { ticker, price }); load() }
+  const setTicker = async (name: string, ticker: string) => {
+    await api("/api/prices", "PUT", { name, ticker })
+    setTickers(t => {
+      const next = { ...t }
+      if (ticker) next[name] = ticker.toUpperCase(); else delete next[name]
+      return next
+    })
+  }
+  const refreshPrices = async () => {
+    setPriceBusy(true)
+    try { await api("/api/prices", "POST"); await load() }
+    finally { setPriceBusy(false) }
+  }
 
   const doRefresh = () => { load() }
 
@@ -733,7 +750,23 @@ export default function Dashboard() {
 
             {activeInvTab === "pl" && (
               <div style={{ marginBottom: 14 }}>
-                <div style={{ fontSize: 11, color: C.muted, marginBottom: 10 }}>Stocks only · prices in USD · tap field to update</div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, gap: 8 }}>
+                  <div style={{ fontSize: 11, color: C.muted }}>Stocks only · prices in USD · set ticker to enable auto-refresh</div>
+                  <button
+                    onClick={refreshPrices}
+                    disabled={priceBusy || Object.keys(tickers).length === 0}
+                    style={{
+                      padding: "7px 13px", fontSize: 11.5, fontWeight: 700,
+                      border: "none", borderRadius: 10, cursor: "pointer",
+                      background: priceBusy ? C.cardHi : C.blue, color: "#0E0F12",
+                      fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6,
+                      opacity: Object.keys(tickers).length === 0 ? 0.5 : 1,
+                    }}
+                  >
+                    <Icon name="refresh" size={13} color="#0E0F12" />
+                    {priceBusy ? "Refreshing…" : "Refresh prices"}
+                  </button>
+                </div>
                 {Object.entries(invByName).length === 0 ? (
                   <Empty icon="invest" label="No stock positions yet" sub="Log a buy to start tracking" />
                 ) : (
@@ -786,19 +819,51 @@ export default function Dashboard() {
                         )}
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                           <input
-                            type="number" placeholder="Update price (USD)" min="0" step="0.01"
-                            defaultValue={cur || ""}
+                            type="text" placeholder="Ticker (e.g. NU, AAPL)"
+                            defaultValue={tickers[name] ?? ""}
+                            autoCapitalize="characters"
+                            spellCheck={false}
                             style={{
                               flex: 1, padding: "10px 12px", fontSize: 13, fontFamily: "inherit",
+                              border: `1px solid ${C.border}`, borderRadius: 10,
+                              background: C.bg, color: C.text, outline: "none", boxSizing: "border-box",
+                              textTransform: "uppercase",
+                            }}
+                            onBlur={e => {
+                              const v = e.target.value.trim().toUpperCase()
+                              if (v !== (tickers[name] ?? "")) setTicker(name, v)
+                            }}
+                          />
+                          <button
+                            onClick={async () => {
+                              const t = tickers[name]
+                              if (!t) return
+                              setPriceBusy(true)
+                              try { await api("/api/prices", "POST"); await load() }
+                              finally { setPriceBusy(false) }
+                            }}
+                            disabled={!tickers[name] || priceBusy}
+                            style={{
+                              padding: "10px 12px", fontSize: 11.5, fontWeight: 700,
+                              border: "none", borderRadius: 10, cursor: "pointer",
+                              background: tickers[name] ? C.blueDim : C.surface,
+                              color: tickers[name] ? C.blue : C.dim,
+                              fontFamily: "inherit", flexShrink: 0,
+                              opacity: priceBusy ? 0.5 : 1,
+                            }}
+                          >Pull</button>
+                          <input
+                            type="number" placeholder="Manual USD" min="0" step="0.01"
+                            style={{
+                              width: 92, padding: "10px 10px", fontSize: 12, fontFamily: "inherit",
                               border: `1px solid ${C.border}`, borderRadius: 10,
                               background: C.bg, color: C.text, outline: "none", boxSizing: "border-box",
                             }}
                             onBlur={e => {
                               const v = parseFloat(e.target.value)
-                              if (!isNaN(v) && v > 0) updatePrice(name, v)
+                              if (!isNaN(v) && v > 0) { updatePrice(name, v); e.currentTarget.value = "" }
                             }}
                           />
-                          <span style={{ fontSize: 12, color: C.muted, flexShrink: 0 }}>USD</span>
                         </div>
                       </Card>
                     )
