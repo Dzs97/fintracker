@@ -1,0 +1,36 @@
+{
+  "name": "fintracker",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "migrate": "node scripts/migrate.js"
+  },
+  "dependencies": {
+    "@upstash/redis": "^1.28.4",
+    "clsx": "^2.1.1",
+    "date-fns": "^3.6.0",
+    "jspdf": "^2.5.1",
+    "jspdf-autotable": "^3.8.2",
+    "next": "14.2.3",
+    "papaparse": "^5.4.1",
+    "react": "^18",
+    "react-dom": "^18",
+    "recharts": "^2.12.4",
+    "tailwind-merge": "^2.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/papaparse": "^5.3.14",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "autoprefixer": "^10.0.1",
+    "dotenv": "^17.4.2",
+    "postcss": "^8",
+    "tailwindcss": "^3.4.1",
+    "tsx": "^4.22.4",
+    "typescript": "^5"
+  }
+}

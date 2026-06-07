@@ -1,0 +1,8 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* { box-sizing: border-box; }
+body { background: #0A0A0F; color: #F0F0FF; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif; }
+input, select { color-scheme: dark; }
+input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.6); }
