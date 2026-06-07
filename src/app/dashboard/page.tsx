@@ -15,6 +15,7 @@ import {
   EntryRow, FormSheet, FAB, MonthNav, inp, lbl,
 } from "@/components/ui"
 import { SparkBar, LineChart, Donut } from "@/components/charts"
+import { MapsEditor } from "@/components/MapsEditor"
 
 const TABS = [
   { id: "Overview",    label: "Overview" },
@@ -43,10 +44,13 @@ export default function Dashboard() {
   const [heroFlash, setHeroFlash] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [quickAdd, setQuickAdd] = useState<null | "expense" | "income" | "cc" | "investment">(null)
-  const [activeInvTab, setActiveInvTab] = useState<"portfolio" | "pl" | "history">("portfolio")
+  const [activeInvTab, setActiveInvTab] = useState<"portfolio" | "pl" | "history" | "maps">("portfolio")
   const [tickers, setTickers] = useState<Record<string, string>>({})
   const [funds, setFunds] = useState<Record<string, string>>({})
+  const [splits, setSplits] = useState<Record<string, Array<{ name: string; weight: number; inv_type?: "fund" | "stock" }>>>({})
   const [priceBusy, setPriceBusy] = useState(false)
+  // Per-position benchmark returns: key = "Name||gf|me" → percent change of index since first buy
+  const [bench, setBench] = useState<Record<string, { symbol: string; pct: number }>>({})
 
   // Undo toast: stash the deleted entity + a restore thunk
   type Toast = { msg: string; restore: () => Promise<void> } | null
@@ -74,7 +78,7 @@ export default function Dashboard() {
   const load = useCallback(async () => {
     setRefreshing(true)
     try {
-      const [entries, ccData, invData, budgets, fx, tickerData, fundData] = await Promise.all([
+      const [entries, ccData, invData, budgets, fx, tickerData, fundData, splitData] = await Promise.all([
         api<{ expenses: AppState["expenses"]; income: AppState["income"] }>("/api/entries"),
         api<{ cc: AppState["cc"]; settled: AppState["settled"] }>("/api/cc"),
         api<{ investments: AppState["investments"]; prices: AppState["prices"] }>("/api/investments"),
@@ -82,9 +86,11 @@ export default function Dashboard() {
         api<{ rate: number }>("/api/fx"),
         api<{ tickers: Record<string, string> }>("/api/prices"),
         api<{ funds: Record<string, string> }>("/api/funds"),
+        api<{ splits: typeof splits }>("/api/splits"),
       ])
       setTickers(tickerData.tickers ?? {})
       setFunds(fundData.funds ?? {})
+      setSplits(splitData.splits ?? {})
       setState({
         expenses: entries.expenses, income: entries.income,
         cc: ccData.cc, settled: ccData.settled,
@@ -100,6 +106,34 @@ export default function Dashboard() {
 
   useEffect(() => { load() }, [load])
   useEffect(() => { setShowForm(false); setQuickAdd(null) }, [tab])
+
+  // Lazy-load benchmark returns when entering Investments > P&L
+  useEffect(() => {
+    if (tab !== "Investments" || activeInvTab !== "pl") return
+    if (!state) return
+    // Build distinct (name, type, earliest-buy) groups
+    type Pos = { key: string; symbol: string; earliest: string }
+    const positions = new Map<string, Pos>()
+    for (const i of state.investments) {
+      const key = `${i.name}||${i.gf ? "gf" : "me"}`
+      const symbol = i.inv_type === "stock" ? "SPY" : "^MXX"
+      const cur = positions.get(key)
+      if (!cur || i.date < cur.earliest) positions.set(key, { key, symbol, earliest: i.date })
+    }
+    // Skip already-fetched + fetch missing in parallel
+    const missing = [...positions.values()].filter(p => !bench[p.key])
+    if (missing.length === 0) return
+    Promise.all(missing.map(async p => {
+      try {
+        const r = await api<{ pct: number; symbol: string }>(`/api/benchmark?symbol=${encodeURIComponent(p.symbol)}&from=${p.earliest}`)
+        return [p.key, { symbol: p.symbol, pct: r.pct }] as const
+      } catch { return null }
+    })).then(rs => {
+      const updates: Record<string, { symbol: string; pct: number }> = {}
+      for (const r of rs) if (r) updates[r[0]] = r[1]
+      if (Object.keys(updates).length) setBench(b => ({ ...b, ...updates }))
+    })
+  }, [tab, activeInvTab, state, bench])
 
   if (loading || !state) {
     return (
@@ -179,6 +213,35 @@ export default function Dashboard() {
       .filter(e => { const d = new Date(e.date); return d.getFullYear() < p.y || (d.getFullYear() === p.y && d.getMonth() <= p.m) })
       .reduce((s, e) => s + e.amount, 0),
   }))
+
+  // Cumulative net (income − expenses) at end of each month.
+  // Investments don't reduce this — they're moved-aside money, not lost.
+  const netWorthLine = last6.map(p => {
+    const periodEnd = new Date(p.y, p.m + 1, 0)
+    const inWindow = (d: Date) => d <= periodEnd
+    const incCum = state.income
+      .filter(e => inWindow(new Date(e.date)))
+      .reduce((s, e) => s + e.amount * FX, 0)
+    const expCum = state.expenses
+      .filter(e => inWindow(new Date(e.date)))
+      .reduce((s, e) => s + e.amount, 0)
+    return { label: p.label, v: Math.max(0, incCum - expCum) }
+  })
+
+  // Live net worth (most-recent point) — actual current investment value
+  // using state.prices for stocks (× FX) and funds (NAV is already MXN).
+  const liveInvestmentValue = state.investments.reduce((s, e) => {
+    const p = state.prices?.[e.name]
+    if (e.inv_type === "stock" && p && e.purchase_price && e.purchase_price > 0) {
+      const shares = e.amount / (e.purchase_price * FX)
+      return s + shares * p.price * FX
+    }
+    if (e.inv_type === "fund" && p && e.purchase_nav && e.purchase_nav > 0) {
+      const shares = e.amount / e.purchase_nav
+      return s + shares * p.price
+    }
+    return s + e.amount  // fallback: cost-basis
+  }, 0)
 
   const invByName: Record<string, { name: string; gf: boolean; cost: number; shares: number }> = {}
   state.investments.filter(i => i.inv_type === "stock").forEach(i => {
@@ -499,6 +562,26 @@ export default function Dashboard() {
                 </div>
               </Card>
             )}
+
+            {/* Net worth trajectory */}
+            <Card style={{ padding: 16, marginBottom: 14 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 10 }}>
+                <Label style={{ marginBottom: 0 }}>Net worth · 6 mo</Label>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: 19, fontWeight: 700, color: C.green, letterSpacing: "-0.4px" }}>
+                    {fmt(netWorthLine[netWorthLine.length - 1].v + liveInvestmentValue)}
+                    <span style={{ fontSize: 10, color: C.muted, fontWeight: 500, marginLeft: 5 }}>MXN</span>
+                  </div>
+                  <div style={{ fontSize: 10, color: C.dim, marginTop: 2 }}>
+                    cash {fmt(netWorthLine[netWorthLine.length - 1].v)} + invested {fmt(liveInvestmentValue)}
+                  </div>
+                </div>
+              </div>
+              <LineChart points={netWorthLine} color={C.green} height={86} />
+              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
+                {last6.map(p => <span key={p.label} style={{ fontSize: 9, color: C.dim }}>{p.label}</span>)}
+              </div>
+            </Card>
 
             {/* Mini charts */}
             <Card style={{ padding: 16, marginBottom: 14 }}>
@@ -822,7 +905,7 @@ export default function Dashboard() {
             <ToggleRow
               value={activeInvTab}
               onChange={setActiveInvTab}
-              options={[{ value: "portfolio", label: "Portfolio" }, { value: "pl", label: "P&L" }, { value: "history", label: "History" }]}
+              options={[{ value: "portfolio", label: "Portfolio" }, { value: "pl", label: "P&L" }, { value: "history", label: "History" }, { value: "maps", label: "Maps" }]}
             />
 
             {activeInvTab === "portfolio" && (
@@ -918,6 +1001,19 @@ export default function Dashboard() {
                               <div style={{ fontSize: 11, color: plMXN >= 0 ? C.green : C.red, marginTop: 2 }}>
                                 {plPct >= 0 ? "+" : ""}{plPct.toFixed(1)}%
                               </div>
+                              {(() => {
+                                const b = bench[key]
+                                if (!b) return null
+                                const out = plPct - b.pct
+                                return (
+                                  <div style={{ fontSize: 9.5, color: C.dim, marginTop: 3 }}>
+                                    vs {b.symbol}: {b.pct >= 0 ? "+" : ""}{b.pct.toFixed(1)}%
+                                    <span style={{ color: out >= 0 ? C.green : C.red, marginLeft: 4 }}>
+                                      ({out >= 0 ? "+" : ""}{out.toFixed(1)})
+                                    </span>
+                                  </div>
+                                )
+                              })()}
                             </div>
                           )}
                         </div>
@@ -1030,6 +1126,19 @@ export default function Dashboard() {
                                 <div style={{ fontSize: 11, color: plMXN >= 0 ? C.green : C.red, marginTop: 2 }}>
                                   {plPct >= 0 ? "+" : ""}{plPct.toFixed(2)}%
                                 </div>
+                                {(() => {
+                                  const b = bench[key]
+                                  if (!b) return null
+                                  const out = plPct - b.pct
+                                  return (
+                                    <div style={{ fontSize: 9.5, color: C.dim, marginTop: 3 }}>
+                                      vs {b.symbol}: {b.pct >= 0 ? "+" : ""}{b.pct.toFixed(2)}%
+                                      <span style={{ color: out >= 0 ? C.green : C.red, marginLeft: 4 }}>
+                                        ({out >= 0 ? "+" : ""}{out.toFixed(2)})
+                                      </span>
+                                    </div>
+                                  )
+                                })()}
                               </div>
                             )}
                           </div>
@@ -1090,8 +1199,19 @@ export default function Dashboard() {
               </>
             )}
 
+            {activeInvTab === "maps" && (
+              <MapsEditor
+                tickers={tickers} setTickers={setTickers}
+                funds={funds} setFunds={setFunds}
+                splits={splits} setSplits={setSplits}
+                reload={load}
+              />
+            )}
+
             {showForm && <div style={{ marginTop: 14 }}>{invForm()}</div>}
-            <FAB label={showForm ? "Close" : "Log buy"} icon={showForm ? "close" : "plus"} onClick={() => setShowForm(v => !v)} color={C.blue} ghost={showForm} />
+            {activeInvTab !== "maps" && (
+              <FAB label={showForm ? "Close" : "Log buy"} icon={showForm ? "close" : "plus"} onClick={() => setShowForm(v => !v)} color={C.blue} ghost={showForm} />
+            )}
           </div>
         )}
 
