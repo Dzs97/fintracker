@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getState, patchState } from "@/lib/state"
 import { nanoid } from "@/lib/utils"
 import { parseEntry } from "@/lib/parseEntry"
+import { getSplits, expandInvestment } from "@/lib/splits"
 import type { Expense, Income, CCCharge, Investment } from "@/types"
 
 /**
@@ -56,11 +57,17 @@ export async function POST(req: NextRequest) {
       break
     }
     case "investment": {
-      entry = {
-        id: nanoid(), name: parsed.name, amount: parsed.amount, date: parsed.date,
+      const base = {
+        name: parsed.name, amount: parsed.amount, date: parsed.date,
         gf: parsed.gf, inv_type: parsed.inv_type,
       }
-      await patchState({ investments: [...state.investments, entry] })
+      const splits = await getSplits()
+      const legs = expandInvestment(base, splits)
+      entry = legs[0]
+      await patchState({ investments: [...state.investments, ...legs] })
+      if (legs.length > 1) {
+        return NextResponse.json({ ok: true, parsed, entry, expanded: legs })
+      }
       break
     }
   }

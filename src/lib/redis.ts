@@ -20,4 +20,6 @@ export const KEYS = {
   tickers:     "ft:tickers",       // Record<assetName, ticker> e.g. { Nubank: "NU" }
   priceCache:  "ft:priceCache",    // Record<ticker, { price, updatedAt }>  (short TTL)
   funds:       "ft:funds",         // Record<assetName, fundName>  e.g. { "Risky Hayek": "Risky Hayek" }
+  splits:      "ft:splits",        // Record<srcName, Array<{name, weight, inv_type?}>>
+                                   //   e.g. { Fintual: [{name:"Risky Hayek", weight:0.75, inv_type:"fund"}, ...] }
 }
