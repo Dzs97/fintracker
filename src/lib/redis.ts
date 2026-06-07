@@ -1,11 +1,12 @@
 import { Redis } from "@upstash/redis"
 
-export const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL!,
-  token: process.env.UPSTASH_REDIS_REST_TOKEN!,
-})
+// Accept either the manual naming (UPSTASH_REDIS_REST_*) or the Vercel
+// Upstash/KV marketplace integration naming (KV_REST_API_*).
+const url   = process.env.UPSTASH_REDIS_REST_URL   ?? process.env.KV_REST_API_URL
+const token = process.env.UPSTASH_REDIS_REST_TOKEN ?? process.env.KV_REST_API_TOKEN
 
-// Key schema
+export const redis = new Redis({ url: url!, token: token! })
+
 export const KEYS = {
   expenses:    "ft:expenses",
   income:      "ft:income",
