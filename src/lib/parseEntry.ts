@@ -29,6 +29,9 @@ const CARD_MAP: Record<string, string> = { openbank: "OpenBank", amex: "Amex", i
 const INV_TYPES = ["fund", "stock", "fondo", "accion"]
 const INCOME_KEYWORDS = ["income", "salary", "ingreso", "pago", "treeline", "usd"]
 const INV_KEYWORDS = ["fintual", "nubank", "nu", "gbm", "stock", "fund", "invest", "compra"]
+// Names that are inherently funds — if the entry text mentions any, treat as fund
+// even when no explicit "fund" / "fondo" keyword is present.
+const FUND_NAMES = ["fintual", "risky hayek", "moderate portman", "risky norris", "moderate pitt", "conservative clooney", "very conservative streep"]
 const STRIP_TOKENS = new Set([
   "gf", "mine", "me", "stock", "fund", "fondo", "usd", "mxn",
   "income", "salary", "invest", "historical",
@@ -101,7 +104,11 @@ export function parseEntry(raw: string): ParsedEntry | { error: string } {
   if (isInvestment) {
     const isGF = lower.includes("gf") || lower.includes(" her ")
     const tRaw = INV_TYPES.find(t => lower.includes(t))
-    const inv_type: "fund" | "stock" = (tRaw === "fondo" || tRaw === "fund") ? "fund" : "stock"
+    const isKnownFund = FUND_NAMES.some(f => lower.includes(f))
+    const inv_type: "fund" | "stock" =
+      (tRaw === "fondo" || tRaw === "fund") ? "fund"
+      : isKnownFund ? "fund"
+      : "stock"
     const invName = nameTokens.find(t => INV_KEYWORDS.includes(t)) ?? name
     // Capitalize known investment names nicely
     const pretty = invName.charAt(0).toUpperCase() + invName.slice(1)

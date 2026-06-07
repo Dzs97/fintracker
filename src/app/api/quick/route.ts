@@ -31,7 +31,18 @@ export async function POST(req: NextRequest) {
   if ("error" in parsed) {
     return NextResponse.json({ error: parsed.error, text }, { status: 400 })
   }
-  if (dry) return NextResponse.json({ ok: true, parsed })
+  if (dry) {
+    // Preview split expansion for investment entries
+    if (parsed.entry_type === "investment") {
+      const splits = await getSplits()
+      const legs = expandInvestment({
+        name: parsed.name, amount: parsed.amount, date: parsed.date,
+        gf: parsed.gf, inv_type: parsed.inv_type,
+      }, splits)
+      if (legs.length > 1) return NextResponse.json({ ok: true, parsed, expanded: legs })
+    }
+    return NextResponse.json({ ok: true, parsed })
+  }
 
   const state = await getState()
   let entry: Expense | Income | CCCharge | Investment
