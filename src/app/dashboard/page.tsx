@@ -228,9 +228,12 @@ export default function Dashboard() {
     return { label: p.label, v: Math.max(0, incCum - expCum) }
   })
 
-  // Live net worth (most-recent point) — actual current investment value
-  // using state.prices for stocks (× FX) and funds (NAV is already MXN).
-  const liveInvestmentValue = state.investments.reduce((s, e) => {
+  // Live investment value vs cost (for the P&L delta on top of savings).
+  // Stocks: cost is MXN, price is USD → multiply by FX. Funds: both MXN.
+  // If we can't compute shares (no purchase_price/_nav), fall back to cost
+  // so the entry contributes 0 P&L (rather than nuking the total).
+  const investmentCost  = state.investments.reduce((s, e) => s + e.amount, 0)
+  const investmentValue = state.investments.reduce((s, e) => {
     const p = state.prices?.[e.name]
     if (e.inv_type === "stock" && p && e.purchase_price && e.purchase_price > 0) {
       const shares = e.amount / (e.purchase_price * FX)
@@ -240,8 +243,9 @@ export default function Dashboard() {
       const shares = e.amount / e.purchase_nav
       return s + shares * p.price
     }
-    return s + e.amount  // fallback: cost-basis
+    return s + e.amount
   }, 0)
+  const investmentPL = investmentValue - investmentCost
 
   const invByName: Record<string, { name: string; gf: boolean; cost: number; shares: number }> = {}
   state.investments.filter(i => i.inv_type === "stock").forEach(i => {
@@ -563,25 +567,37 @@ export default function Dashboard() {
               </Card>
             )}
 
-            {/* Net worth trajectory */}
-            <Card style={{ padding: 16, marginBottom: 14 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 10 }}>
-                <Label style={{ marginBottom: 0 }}>Net worth · 6 mo</Label>
-                <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: 19, fontWeight: 700, color: C.green, letterSpacing: "-0.4px" }}>
-                    {fmt(netWorthLine[netWorthLine.length - 1].v + liveInvestmentValue)}
-                    <span style={{ fontSize: 10, color: C.muted, fontWeight: 500, marginLeft: 5 }}>MXN</span>
+            {/* Net worth = (income − expenses) + (investment_value − investment_cost) */}
+            {(() => {
+              const savedLatest = netWorthLine[netWorthLine.length - 1].v
+              const netWorth = savedLatest + investmentPL
+              return (
+                <Card style={{ padding: 16, marginBottom: 14 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 10 }}>
+                    <Label style={{ marginBottom: 0 }}>Net worth · 6 mo</Label>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontSize: 19, fontWeight: 700, color: netWorth >= 0 ? C.green : C.red, letterSpacing: "-0.4px" }}>
+                        {fmt(netWorth)}
+                        <span style={{ fontSize: 10, color: C.muted, fontWeight: 500, marginLeft: 5 }}>MXN</span>
+                      </div>
+                      <div style={{ fontSize: 10, color: C.dim, marginTop: 2 }}>
+                        saved {fmt(savedLatest)}
+                        <span style={{ color: investmentPL >= 0 ? C.green : C.red, marginLeft: 4 }}>
+                          {investmentPL >= 0 ? " +" : " "}{fmt(investmentPL)} P&L
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                  <div style={{ fontSize: 10, color: C.dim, marginTop: 2 }}>
-                    cash {fmt(netWorthLine[netWorthLine.length - 1].v)} + invested {fmt(liveInvestmentValue)}
+                  <LineChart points={netWorthLine} color={C.green} height={86} />
+                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
+                    {last6.map(p => <span key={p.label} style={{ fontSize: 9, color: C.dim }}>{p.label}</span>)}
                   </div>
-                </div>
-              </div>
-              <LineChart points={netWorthLine} color={C.green} height={86} />
-              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
-                {last6.map(p => <span key={p.label} style={{ fontSize: 9, color: C.dim }}>{p.label}</span>)}
-              </div>
-            </Card>
+                  <div style={{ fontSize: 10, color: C.dim, marginTop: 6, textAlign: "center" }}>
+                    Line: cumulative (income − expenses). Investment P&L is the live delta on top.
+                  </div>
+                </Card>
+              )
+            })()}
 
             {/* Mini charts */}
             <Card style={{ padding: 16, marginBottom: 14 }}>
