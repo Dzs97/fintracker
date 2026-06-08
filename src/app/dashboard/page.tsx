@@ -16,6 +16,7 @@ import {
 } from "@/components/ui"
 import { SparkBar, LineChart, Donut } from "@/components/charts"
 import { MapsEditor } from "@/components/MapsEditor"
+import { QuickLogSheet } from "@/components/QuickLogSheet"
 
 const TABS = [
   { id: "Overview",    label: "Overview" },
@@ -49,6 +50,7 @@ export default function Dashboard() {
   const [funds, setFunds] = useState<Record<string, string>>({})
   const [splits, setSplits] = useState<Record<string, Array<{ name: string; weight: number; inv_type?: "fund" | "stock" }>>>({})
   const [priceBusy, setPriceBusy] = useState(false)
+  const [quickOpen, setQuickOpen] = useState(false)
   // Per-position benchmark returns: key = "Name||gf|me" → percent change of index since first buy
   const [bench, setBench] = useState<Record<string, { symbol: string; pct: number }>>({})
 
@@ -467,6 +469,13 @@ export default function Dashboard() {
             </button>
           )
         })}
+        <button onClick={() => setQuickOpen(true)} title="Quick log" style={{
+          padding: "0 13px", border: "none", borderLeft: `1px solid ${C.border}`,
+          background: "transparent", color: C.green, cursor: "pointer",
+          flexShrink: 0, display: "flex", alignItems: "center", gap: 4,
+        }}>
+          <Icon name="plus" size={18} color={C.green} />
+        </button>
         <button onClick={doRefresh} title="Refresh" style={{
           padding: "0 13px", border: "none", borderLeft: `1px solid ${C.border}`,
           background: "transparent", color: refreshing ? C.green : C.muted, cursor: "pointer",
@@ -1232,6 +1241,9 @@ export default function Dashboard() {
         )}
 
       </div>
+
+      {/* Global quick-log sheet */}
+      <QuickLogSheet open={quickOpen} onClose={() => setQuickOpen(false)} onLogged={load} />
 
       {/* Undo toast */}
       {toast && (
