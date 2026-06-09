@@ -126,15 +126,20 @@ interface EntryRowProps {
   amount: React.ReactNode
   amtColor: string
   onDel?: (() => void) | null
+  onEdit?: (() => void) | null
   rightExtra?: React.ReactNode
   isLast?: boolean
 }
-export function EntryRow({ icon, iconBg, name, sub, amount, amtColor, onDel, rightExtra, isLast }: EntryRowProps) {
+export function EntryRow({ icon, iconBg, name, sub, amount, amtColor, onDel, onEdit, rightExtra, isLast }: EntryRowProps) {
   return (
-    <div style={{
-      display: "flex", alignItems: "center", gap: 12, padding: "13px 16px",
-      borderBottom: isLast ? "none" : `1px solid ${C.border}`,
-    }}>
+    <div
+      onClick={onEdit ?? undefined}
+      style={{
+        display: "flex", alignItems: "center", gap: 12, padding: "13px 16px",
+        borderBottom: isLast ? "none" : `1px solid ${C.border}`,
+        cursor: onEdit ? "pointer" : undefined,
+        WebkitTapHighlightColor: "transparent",
+      }}>
       <div style={{
         width: 38, height: 38, borderRadius: 11, background: iconBg,
         display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
@@ -146,10 +151,13 @@ export function EntryRow({ icon, iconBg, name, sub, amount, amtColor, onDel, rig
       {rightExtra}
       <div style={{ fontSize: 15, fontWeight: 700, color: amtColor, flexShrink: 0, letterSpacing: "-0.3px" }}>{amount}</div>
       {onDel && (
-        <button onClick={onDel} style={{
-          background: "none", border: "none", cursor: "pointer", color: C.dim,
-          padding: 2, flexShrink: 0, display: "flex",
-        }}>
+        <button
+          onClick={e => { e.stopPropagation(); onDel() }}
+          style={{
+            background: "none", border: "none", cursor: "pointer", color: C.dim,
+            padding: 2, flexShrink: 0, display: "flex",
+          }}
+        >
           <Icon name="close" size={16} />
         </button>
       )}

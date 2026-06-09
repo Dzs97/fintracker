@@ -34,3 +34,22 @@ export async function DELETE(req: NextRequest) {
   else if (type === "income") await patchState({ income: state.income.filter(e => e.id !== id) })
   return NextResponse.json({ ok: true })
 }
+
+export async function PATCH(req: NextRequest) {
+  const { type, id, ...fields } = await req.json()
+  if (!id) return NextResponse.json({ error: "missing id" }, { status: 400 })
+  const state = await getState()
+  if (type === "expense") {
+    const next = state.expenses.map(e => e.id === id ? { ...e, ...fields, id } : e)
+    const updated = next.find(e => e.id === id)
+    await patchState({ expenses: next })
+    if (updated) void recordLearned(updated.name, updated.cat)
+    return NextResponse.json({ ok: true, entry: updated })
+  }
+  if (type === "income") {
+    const next = state.income.map(e => e.id === id ? { ...e, ...fields, id } : e)
+    await patchState({ income: next })
+    return NextResponse.json({ ok: true, entry: next.find(e => e.id === id) })
+  }
+  return NextResponse.json({ error: "unknown type" }, { status: 400 })
+}

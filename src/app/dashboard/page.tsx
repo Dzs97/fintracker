@@ -17,6 +17,8 @@ import {
 import { SparkBar, LineChart, Donut } from "@/components/charts"
 import { MapsEditor } from "@/components/MapsEditor"
 import { QuickLogSheet } from "@/components/QuickLogSheet"
+import { EditEntrySheet } from "@/components/EditEntrySheet"
+import type { Expense, Income, CCCharge } from "@/types"
 
 const TABS = [
   { id: "Overview",    label: "Overview" },
@@ -51,6 +53,12 @@ export default function Dashboard() {
   const [splits, setSplits] = useState<Record<string, Array<{ name: string; weight: number; inv_type?: "fund" | "stock" }>>>({})
   const [priceBusy, setPriceBusy] = useState(false)
   const [quickOpen, setQuickOpen] = useState(false)
+  const [editing, setEditing] = useState<
+    | { kind: "expense"; row: Expense }
+    | { kind: "income";  row: Income }
+    | { kind: "cc";      row: CCCharge }
+    | null
+  >(null)
   // Per-position benchmark returns: key = "Name||gf|me" → percent change of index since first buy
   const [bench, setBench] = useState<Record<string, { symbol: string; pct: number }>>({})
 
@@ -761,6 +769,10 @@ export default function Dashboard() {
                           amount={fmt(e.amount)}
                           amtColor={C.amber}
                           onDel={!e.installmentOf ? () => delCC(e.id) : null}
+                          onEdit={!e.installmentOf ? () => {
+                            const src = state.cc.find(x => x.id === e.id)
+                            if (src) setEditing({ kind: "cc", row: src })
+                          } : null}
                         />
                       )
                     })}
@@ -810,6 +822,7 @@ export default function Dashboard() {
                         amount={fmt(e.amount)}
                         amtColor={CAT_COLORS[e.cat] ?? C.red}
                         onDel={() => delEntry("expense", e.id)}
+                        onEdit={() => setEditing({ kind: "expense", row: e })}
                       />
                     ))}
                   </div>
@@ -854,6 +867,7 @@ export default function Dashboard() {
                       amount={fmt(e.amount) + " USD"}
                       amtColor={C.green}
                       onDel={() => delEntry("income", e.id)}
+                      onEdit={() => setEditing({ kind: "income", row: e })}
                       rightExtra={<div style={{ fontSize: 11, color: C.muted, textAlign: "right", marginRight: 4 }}>{fmt(e.amount * FX)} MXN</div>}
                     />
                   ))}
@@ -1244,6 +1258,8 @@ export default function Dashboard() {
 
       {/* Global quick-log sheet */}
       <QuickLogSheet open={quickOpen} onClose={() => setQuickOpen(false)} onLogged={load} />
+      {/* Edit sheet — tap any expense / income / CC row */}
+      <EditEntrySheet editing={editing} onClose={() => setEditing(null)} onSaved={load} />
 
       {/* Undo toast */}
       {toast && (

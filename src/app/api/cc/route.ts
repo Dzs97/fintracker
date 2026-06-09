@@ -26,8 +26,21 @@ export async function DELETE(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const { card } = await req.json()
+  const body = await req.json()
   const state = await getState()
+
+  // Edit path: body has { id, ...fields } → update the charge in place
+  if (body.id) {
+    const { id, ...fields } = body
+    const next = state.cc.map(e => e.id === id ? { ...e, ...fields, id } : e)
+    const updated = next.find(e => e.id === id)
+    await patchState({ cc: next })
+    if (updated) void recordLearned(updated.name, updated.cat)
+    return NextResponse.json({ ok: true, entry: updated })
+  }
+
+  // Settle path (original behaviour): body has { card }
+  const { card } = body
   const raw = state.cc.filter(e => e.card === card).reduce((s, e) => s + e.amount, 0)
   const pool = Math.max(0, raw - (state.settled[card] ?? 0))
   if (pool === 0) return NextResponse.json({ ok: true, pool: 0 })
