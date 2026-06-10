@@ -3,22 +3,27 @@ import { getState, patchState } from "@/lib/state"
 import { redis, KEYS } from "@/lib/redis"
 import { getYahooQuote } from "@/lib/yahoo"
 import { getFintualPrice } from "@/lib/fintual"
+import { computeCycle, type CardConfig } from "@/lib/cardCycles"
+import { nanoid } from "@/lib/utils"
+import type {
+  Statement, Recurring, Expense, Income, CCCharge, Investment,
+} from "@/types"
 
 /**
- * Scheduled (vercel.json crons) and also manually callable:
- *   POST /api/cron/refresh
+ * Daily cron. Performs in order:
+ *   1) Refresh stock + fund prices (Yahoo + Fintual)
+ *   2) Auto-create placeholder statements when a card has cut
+ *   3) Fire recurring entries whose dayOfMonth has reached / passed
+ *   4) Snapshot all state to ft:backup:<YYYY-MM-DD>, rotate to last 14
  *
- * Vercel cron requests carry `Authorization: Bearer <CRON_SECRET>` if you
- * set CRON_SECRET in env. We accept those, plus manual calls in dev.
- * Other callers are rejected if CRON_SECRET is set.
+ * Authorized by Bearer CRON_SECRET if set.
  */
-async function run() {
+async function refreshPrices(): Promise<Array<Record<string, unknown>>> {
   const tickers = (await redis.get<Record<string, string>>(KEYS.tickers)) ?? {}
   const funds   = (await redis.get<Record<string, string>>(KEYS.funds))   ?? {}
   const state = await getState()
   const prices = { ...state.prices }
-  const log: Array<{ name: string; src: "yahoo" | "fintual"; ok: boolean; price?: number }> = []
-
+  const log: Array<Record<string, unknown>> = []
   await Promise.all([
     ...Object.entries(tickers).map(async ([name, ticker]) => {
       const q = await getYahooQuote(ticker)
@@ -31,9 +36,99 @@ async function run() {
       else { log.push({ name, src: "fintual", ok: false }) }
     }),
   ])
-
   await patchState({ prices })
-  return { ok: true, log, ranAt: new Date().toISOString() }
+  return log
+}
+
+function periodOf(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
+}
+
+async function autoCreateStatements(now: Date): Promise<Array<{ card: string; period: string }>> {
+  const cfg = (await redis.get<Record<string, CardConfig>>(KEYS.cardConfig)) ?? {}
+  const state = await getState()
+  const list = state.statements ?? []
+  const created: Array<{ card: string; period: string }> = []
+  let dirty = false
+  for (const [card, c] of Object.entries(cfg)) {
+    const cycle = computeCycle(c, now)
+    const period = periodOf(cycle.lastCutoff)
+    const exists = list.some(s => s.card === card && s.period === period)
+    if (!exists && now >= cycle.lastCutoff) {
+      const placeholder: Statement = {
+        id: nanoid(),
+        card,
+        period,
+        closingBalance: 0,
+        paid: 0,
+        dueOn: cycle.statementDue.toISOString().split("T")[0],
+        notes: "Auto-created at cutoff. Fill in closingBalance + pagoMinimo from your bank statement.",
+      }
+      list.push(placeholder)
+      created.push({ card, period })
+      dirty = true
+    }
+  }
+  if (dirty) await patchState({ statements: list })
+  return created
+}
+
+async function fireRecurring(now: Date): Promise<Array<{ name: string; type: string; amount: number }>> {
+  const list = (await redis.get<Recurring[]>(KEYS.recurring)) ?? []
+  if (list.length === 0) return []
+  const thisPeriod = periodOf(now)
+  const today = now.getDate()
+  const fired: Array<{ name: string; type: string; amount: number }> = []
+  const state = await getState()
+  const expenses: Expense[] = [...state.expenses]
+  const income: Income[] = [...state.income]
+  const cc: CCCharge[] = [...state.cc]
+  const investments: Investment[] = [...state.investments]
+  const isoDate = now.toISOString().split("T")[0]
+  let dirty = false
+  const nextRecurring = list.map(r => {
+    if (!r.active) return r
+    if (r.lastFired === thisPeriod) return r
+    const month = now.getMonth(), year = now.getFullYear()
+    const lastDay = new Date(year, month + 1, 0).getDate()
+    const targetDay = Math.min(r.dayOfMonth, lastDay)
+    if (today < targetDay) return r
+    // Fire it
+    const base = { name: r.name, amount: r.amount, date: isoDate, note: r.note || "auto-recurring" }
+    if (r.type === "expense") expenses.push({ id: nanoid(), ...base, cat: r.cat ?? "Other" })
+    else if (r.type === "income") income.push({ id: nanoid(), ...base })
+    else if (r.type === "cc")     cc.push({ id: nanoid(), ...base, cat: r.cat ?? "Other", card: (r.card ?? "OpenBank") as CCCharge["card"] })
+    else if (r.type === "investment") investments.push({ id: nanoid(), ...base, gf: !!r.gf, inv_type: r.inv_type ?? "fund" })
+    fired.push({ name: r.name, type: r.type, amount: r.amount })
+    dirty = true
+    return { ...r, lastFired: thisPeriod }
+  })
+  if (dirty) {
+    await Promise.all([
+      patchState({ expenses, income, cc, investments }),
+      redis.set(KEYS.recurring, nextRecurring),
+    ])
+  }
+  return fired
+}
+
+const MAX_BACKUPS = 14
+
+async function snapshotBackup(now: Date): Promise<{ date: string; kept: number }> {
+  const date = now.toISOString().split("T")[0]
+  const state = await getState()
+  await redis.set(`ft:backup:${date}`, state)
+  const idx = (await redis.get<string[]>(KEYS.backupIdx)) ?? []
+  // Dedupe and prepend
+  const updated = [date, ...idx.filter(d => d !== date)]
+  // Trim
+  const keep = updated.slice(0, MAX_BACKUPS)
+  const drop = updated.slice(MAX_BACKUPS)
+  await Promise.all([
+    redis.set(KEYS.backupIdx, keep),
+    ...drop.map(d => redis.del(`ft:backup:${d}`)),
+  ])
+  return { date, kept: keep.length }
 }
 
 function authorized(req: NextRequest) {
@@ -41,6 +136,24 @@ function authorized(req: NextRequest) {
   if (!want) return true
   const got = req.headers.get("authorization") ?? ""
   return got === `Bearer ${want}`
+}
+
+async function run() {
+  const now = new Date()
+  const [prices, newStatements, fired, backup] = await Promise.all([
+    refreshPrices(),
+    autoCreateStatements(now),
+    fireRecurring(now),
+    snapshotBackup(now),
+  ])
+  return {
+    ok: true,
+    ranAt: now.toISOString(),
+    prices,
+    autoCreatedStatements: newStatements,
+    recurringFired: fired,
+    backup,
+  }
 }
 
 export async function GET(req: NextRequest) {

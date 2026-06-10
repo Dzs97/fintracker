@@ -76,6 +76,36 @@ export interface Statement {
   notes?: string
 }
 
+/** Monthly auto-fire template. Cron processes on dayOfMonth each month
+ *  if `active` and `lastFired !== thisPeriod`. */
+export interface Recurring {
+  id: string
+  name: string
+  type: "expense" | "income" | "cc" | "investment"
+  amount: number
+  cat?: Category
+  card?: CCCard | string
+  gf?: boolean
+  inv_type?: InvType
+  dayOfMonth: number      // 1..31, clamped to month length
+  active: boolean
+  lastFired?: string      // "YYYY-MM" of last firing
+  note?: string
+}
+
+/** Locked-in future MSI / financing installment line.
+ *  E.g. "IKEA 4 more @ $2,807.96/mo on Invex." Used by forecasting UI;
+ *  decremented manually as installments hit (or via Mark paid). */
+export interface FutureObligation {
+  id: string
+  card: CCCard | string
+  description: string
+  monthlyAmount: number     // MXN per remaining installment
+  monthsRemaining: number   // includes the next firing
+  startMonth?: string       // "YYYY-MM" of next installment; defaults to current
+  notes?: string
+}
+
 export interface AppState {
   expenses: Expense[]
   income: Income[]

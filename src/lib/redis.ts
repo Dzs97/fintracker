@@ -30,4 +30,11 @@ export const KEYS = {
                                    //   the due date falls in the following month.
   statements:  "ft:statements",    // Statement[] — per-card per-period bank statements with
                                    //   closingBalance (authoritative) and cumulative paid.
+  recurring:   "ft:recurring",     // Recurring[] — monthly auto-fire templates (Netflix, Telmex,
+                                   //   gym, salary, etc.) processed by the daily cron.
+  obligations: "ft:obligations",   // FutureObligation[] — locked-in MSI / financing tail
+                                   //   per card (IKEA 4 more @ X/mo, etc.), used by forecast UI.
+  backupIdx:   "ft:backup:idx",    // string[] — list of dates (YYYY-MM-DD) of stored snapshots,
+                                   //   rotated to keep the most recent N. Each snapshot is at
+                                   //   `ft:backup:<date>`.
 }

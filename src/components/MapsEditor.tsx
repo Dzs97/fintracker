@@ -1,9 +1,10 @@
 "use client"
 import { useState } from "react"
-import { C, CC_CARDS } from "@/lib/utils"
-import { Card, Label, inp, lbl } from "./ui"
+import { C, CC_CARDS, CATS } from "@/lib/utils"
+import { Card, Label, inp, lbl, ToggleRow } from "./ui"
 import { Icon } from "./Icon"
 import { computeCycle, type CardConfig } from "@/lib/cardCycles"
+import type { Recurring, FutureObligation } from "@/types"
 
 type SplitLeg = { name: string; weight: number; inv_type?: "fund" | "stock" }
 type SplitMap = Record<string, SplitLeg[]>
@@ -17,6 +18,10 @@ interface Props {
   setSplits: React.Dispatch<React.SetStateAction<SplitMap>>
   cardConfig: Record<string, CardConfig>
   setCardConfig: React.Dispatch<React.SetStateAction<Record<string, CardConfig>>>
+  recurring: Recurring[]
+  setRecurring: React.Dispatch<React.SetStateAction<Recurring[]>>
+  obligations: FutureObligation[]
+  setObligations: React.Dispatch<React.SetStateAction<FutureObligation[]>>
   reload: () => Promise<void>
 }
 
@@ -30,7 +35,11 @@ async function api<T>(path: string, method: string, body?: unknown): Promise<T> 
   return res.json()
 }
 
-export function MapsEditor({ tickers, setTickers, funds, setFunds, splits, setSplits, cardConfig, setCardConfig, reload }: Props) {
+export function MapsEditor({
+  tickers, setTickers, funds, setFunds, splits, setSplits,
+  cardConfig, setCardConfig, recurring, setRecurring,
+  obligations, setObligations, reload,
+}: Props) {
   const [newTickerName, setNewTickerName] = useState("")
   const [newTickerSym, setNewTickerSym] = useState("")
   const [newFundName, setNewFundName] = useState("")
@@ -236,7 +245,261 @@ export function MapsEditor({ tickers, setTickers, funds, setFunds, splits, setSp
           </div>
         </div>
       </Card>
+
+      {/* ── Recurring entries ── */}
+      <RecurringSection recurring={recurring} setRecurring={setRecurring} reload={reload} smallInp={smallInp} />
+
+      {/* ── Future MSI obligations ── */}
+      <ObligationsSection obligations={obligations} setObligations={setObligations} reload={reload} smallInp={smallInp} />
     </div>
+  )
+}
+
+/* ── Recurring section ─────────────────────────────────────────────── */
+function RecurringSection({ recurring, setRecurring, reload, smallInp }: {
+  recurring: Recurring[]
+  setRecurring: React.Dispatch<React.SetStateAction<Recurring[]>>
+  reload: () => Promise<void>
+  smallInp: React.CSSProperties
+}) {
+  const [adding, setAdding] = useState(false)
+  const blank = {
+    name: "", type: "expense" as Recurring["type"],
+    amount: "", cat: "Other", card: "OpenBank",
+    dayOfMonth: "1",
+  }
+  const [form, setForm] = useState(blank)
+
+  const upsert = async (r: Partial<Recurring> & { id?: string }) => {
+    const out = await api<{ entry: Recurring }>("/api/recurring", "POST", r)
+    setRecurring(list => {
+      const idx = list.findIndex(x => x.id === out.entry.id)
+      return idx === -1 ? [...list, out.entry] : list.map(x => x.id === out.entry.id ? out.entry : x)
+    })
+  }
+  const remove = async (id: string) => {
+    if (!confirm("Remove this recurring entry?")) return
+    await api("/api/recurring", "DELETE", { id })
+    setRecurring(list => list.filter(r => r.id !== id))
+  }
+  const toggle = async (r: Recurring) => upsert({ ...r, active: !r.active })
+
+  const submitAdd = async () => {
+    if (!form.name || !form.amount) return
+    await upsert({
+      name: form.name, type: form.type, amount: parseFloat(form.amount),
+      cat: form.type === "expense" || form.type === "cc" ? form.cat as Recurring["cat"] : undefined,
+      card: form.type === "cc" ? form.card : undefined,
+      dayOfMonth: parseInt(form.dayOfMonth) || 1,
+      active: true,
+    })
+    setForm(blank); setAdding(false); await reload()
+  }
+
+  return (
+    <Card style={{ padding: 16, marginBottom: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+        <Label style={{ marginBottom: 0 }}>Recurring entries</Label>
+        <button onClick={() => setAdding(v => !v)} style={{
+          padding: "5px 10px", fontSize: 10.5, fontWeight: 700, border: "none", borderRadius: 8,
+          cursor: "pointer", background: adding ? C.surface : C.green, color: adding ? C.muted : "#0E0F12",
+          fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 4,
+          ...(adding ? { border: `1px solid ${C.border}` } : {}),
+        }}>
+          <Icon name={adding ? "close" : "plus"} size={11} color={adding ? C.muted : "#0E0F12"} />
+          {adding ? "Cancel" : "Add"}
+        </button>
+      </div>
+      {recurring.length === 0 && !adding && (
+        <div style={{ fontSize: 11.5, color: C.dim, marginBottom: 8 }}>
+          No recurring entries. Add Netflix, Telmex, gym, salary, etc. — they'll auto-fire on their day each month.
+        </div>
+      )}
+      {recurring.map(r => (
+        <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 0", borderBottom: `1px solid ${C.border}` }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 600, color: r.active ? C.text : C.dim }}>
+              {r.name}
+              {!r.active && <span style={{ fontSize: 9, color: C.dim, marginLeft: 6 }}>paused</span>}
+            </div>
+            <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+              {r.type} · ${r.amount} · day {r.dayOfMonth}{r.cat ? ` · ${r.cat}` : ""}{r.card ? ` · ${r.card}` : ""}
+              {r.lastFired ? ` · fired ${r.lastFired}` : ""}
+            </div>
+          </div>
+          <button onClick={() => toggle(r)} style={{
+            padding: "4px 10px", fontSize: 10.5, fontWeight: 700, border: `1px solid ${C.border}`, borderRadius: 8,
+            cursor: "pointer", background: "transparent", color: r.active ? C.muted : C.green, fontFamily: "inherit",
+          }}>{r.active ? "Pause" : "Resume"}</button>
+          <button onClick={() => remove(r.id)} style={{ background: "none", border: "none", cursor: "pointer", color: C.dim, padding: 4 }}>
+            <Icon name="close" size={14} />
+          </button>
+        </div>
+      ))}
+      {adding && (
+        <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
+          <label style={lbl}>Name</label>
+          <input style={inp} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Netflix, salary, Telmex…" />
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 8 }}>
+            <div>
+              <label style={lbl}>Type</label>
+              <select style={{ ...smallInp, width: "100%" }} value={form.type} onChange={e => setForm({ ...form, type: e.target.value as Recurring["type"] })}>
+                <option value="expense">expense</option>
+                <option value="income">income</option>
+                <option value="cc">CC charge</option>
+                <option value="investment">investment</option>
+              </select>
+            </div>
+            <div>
+              <label style={lbl}>Amount</label>
+              <input style={{ ...smallInp, width: "100%" }} type="number" min="0" step="0.01" value={form.amount}
+                onChange={e => setForm({ ...form, amount: e.target.value })} placeholder="0.00" />
+            </div>
+            <div>
+              <label style={lbl}>Day of month</label>
+              <input style={{ ...smallInp, width: "100%" }} type="number" min="1" max="31" value={form.dayOfMonth}
+                onChange={e => setForm({ ...form, dayOfMonth: e.target.value })} />
+            </div>
+          </div>
+          {(form.type === "expense" || form.type === "cc") && (
+            <>
+              <label style={lbl}>Category</label>
+              <select style={inp} value={form.cat} onChange={e => setForm({ ...form, cat: e.target.value })}>
+                {CATS.map(c => <option key={c}>{c}</option>)}
+              </select>
+            </>
+          )}
+          {form.type === "cc" && (
+            <>
+              <label style={lbl}>Card</label>
+              <ToggleRow value={form.card as (typeof CC_CARDS)[number]} onChange={v => setForm({ ...form, card: v })} options={CC_CARDS.map(c => ({ value: c, label: c }))} />
+            </>
+          )}
+          <button onClick={submitAdd} disabled={!form.name || !form.amount} style={{
+            width: "100%", padding: 12, fontSize: 14, fontWeight: 700, border: "none", borderRadius: 12,
+            cursor: "pointer", background: C.green, color: "#0E0F12", fontFamily: "inherit",
+            opacity: (!form.name || !form.amount) ? 0.5 : 1,
+          }}>Save recurring</button>
+        </div>
+      )}
+    </Card>
+  )
+}
+
+/* ── Future obligations section ────────────────────────────────────── */
+function ObligationsSection({ obligations, setObligations, reload, smallInp }: {
+  obligations: FutureObligation[]
+  setObligations: React.Dispatch<React.SetStateAction<FutureObligation[]>>
+  reload: () => Promise<void>
+  smallInp: React.CSSProperties
+}) {
+  const [adding, setAdding] = useState(false)
+  const blank = {
+    card: "Invex" as (typeof CC_CARDS)[number],
+    description: "",
+    monthlyAmount: "",
+    monthsRemaining: "",
+  }
+  const [form, setForm] = useState(blank)
+
+  const upsert = async (o: Partial<FutureObligation> & { id?: string }) => {
+    const out = await api<{ entry: FutureObligation }>("/api/obligations", "POST", o)
+    setObligations(list => {
+      const idx = list.findIndex(x => x.id === out.entry.id)
+      return idx === -1 ? [...list, out.entry] : list.map(x => x.id === out.entry.id ? out.entry : x)
+    })
+  }
+  const remove = async (id: string) => {
+    if (!confirm("Remove this obligation?")) return
+    await api("/api/obligations", "DELETE", { id })
+    setObligations(list => list.filter(o => o.id !== id))
+  }
+  const markPaid = async (id: string) => {
+    const out = await api<{ obligations: FutureObligation[] }>("/api/obligations", "PATCH", { id, dec: 1 })
+    setObligations(out.obligations)
+  }
+  const submitAdd = async () => {
+    if (!form.description || !form.monthlyAmount || !form.monthsRemaining) return
+    await upsert({
+      card: form.card,
+      description: form.description,
+      monthlyAmount: parseFloat(form.monthlyAmount),
+      monthsRemaining: parseInt(form.monthsRemaining),
+    })
+    setForm(blank); setAdding(false); await reload()
+  }
+
+  // Group by card
+  const byCard: Record<string, FutureObligation[]> = {}
+  for (const o of obligations) (byCard[o.card] ??= []).push(o)
+
+  return (
+    <Card style={{ padding: 16, marginBottom: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+        <Label style={{ marginBottom: 0 }}>Future MSI obligations</Label>
+        <button onClick={() => setAdding(v => !v)} style={{
+          padding: "5px 10px", fontSize: 10.5, fontWeight: 700, border: "none", borderRadius: 8,
+          cursor: "pointer", background: adding ? C.surface : C.amber, color: adding ? C.muted : "#0E0F12",
+          fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 4,
+          ...(adding ? { border: `1px solid ${C.border}` } : {}),
+        }}>
+          <Icon name={adding ? "close" : "plus"} size={11} color={adding ? C.muted : "#0E0F12"} />
+          {adding ? "Cancel" : "Add"}
+        </button>
+      </div>
+      {obligations.length === 0 && !adding && (
+        <div style={{ fontSize: 11.5, color: C.dim, marginBottom: 8 }}>
+          No locked-in MSI obligations. Add ongoing installment plans so you can see your debt runway 12 months out.
+        </div>
+      )}
+      {Object.entries(byCard).map(([card, items]) => (
+        <div key={card} style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.amber, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 4 }}>{card}</div>
+          {items.map(o => (
+            <div key={o.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: `1px solid ${C.border}` }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{o.description}</div>
+                <div style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>
+                  ${o.monthlyAmount.toFixed(2)} × {o.monthsRemaining} = ${(o.monthlyAmount * o.monthsRemaining).toFixed(2)}
+                </div>
+              </div>
+              <button onClick={() => markPaid(o.id)} title="Decrement by 1 (when a payment hits)" style={{
+                padding: "4px 10px", fontSize: 10.5, fontWeight: 700, border: "none", borderRadius: 8,
+                cursor: "pointer", background: C.greenDim, color: C.green, fontFamily: "inherit",
+              }}>−1 mo</button>
+              <button onClick={() => remove(o.id)} style={{ background: "none", border: "none", cursor: "pointer", color: C.dim, padding: 4 }}>
+                <Icon name="close" size={14} />
+              </button>
+            </div>
+          ))}
+        </div>
+      ))}
+      {adding && (
+        <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
+          <label style={lbl}>Card</label>
+          <ToggleRow value={form.card} onChange={v => setForm({ ...form, card: v as (typeof CC_CARDS)[number] })} options={CC_CARDS.map(c => ({ value: c, label: c }))} />
+          <label style={lbl}>Description</label>
+          <input style={inp} value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="IKEA, Aeromexico, Casa Rodriguez…" />
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <div>
+              <label style={lbl}>Monthly (MXN)</label>
+              <input style={{ ...smallInp, width: "100%" }} type="number" min="0" step="0.01" value={form.monthlyAmount}
+                onChange={e => setForm({ ...form, monthlyAmount: e.target.value })} placeholder="2807.96" />
+            </div>
+            <div>
+              <label style={lbl}>Months left</label>
+              <input style={{ ...smallInp, width: "100%" }} type="number" min="1" max="60" value={form.monthsRemaining}
+                onChange={e => setForm({ ...form, monthsRemaining: e.target.value })} placeholder="4" />
+            </div>
+          </div>
+          <button onClick={submitAdd} disabled={!form.description || !form.monthlyAmount || !form.monthsRemaining} style={{
+            width: "100%", marginTop: 8, padding: 12, fontSize: 14, fontWeight: 700, border: "none", borderRadius: 12,
+            cursor: "pointer", background: C.amber, color: "#0E0F12", fontFamily: "inherit",
+            opacity: (!form.description || !form.monthlyAmount || !form.monthsRemaining) ? 0.5 : 1,
+          }}>Save obligation</button>
+        </div>
+      )}
+    </Card>
   )
 }
 

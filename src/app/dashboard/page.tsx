@@ -20,7 +20,7 @@ import { computeCycle, partitionByCycle, fmtDueLabel, type CardConfig } from "@/
 import { StatementsPanel } from "@/components/StatementsPanel"
 import { QuickLogSheet } from "@/components/QuickLogSheet"
 import { EditEntrySheet } from "@/components/EditEntrySheet"
-import type { Expense, Income, CCCharge } from "@/types"
+import type { Expense, Income, CCCharge, Recurring, FutureObligation } from "@/types"
 
 const TABS = [
   { id: "Overview",    label: "Overview" },
@@ -54,6 +54,8 @@ export default function Dashboard() {
   const [funds, setFunds] = useState<Record<string, string>>({})
   const [splits, setSplits] = useState<Record<string, Array<{ name: string; weight: number; inv_type?: "fund" | "stock" }>>>({})
   const [cardConfig, setCardConfig] = useState<Record<string, CardConfig>>({})
+  const [recurring, setRecurring] = useState<Recurring[]>([])
+  const [obligations, setObligations] = useState<FutureObligation[]>([])
   const [priceBusy, setPriceBusy] = useState(false)
   const [quickOpen, setQuickOpen] = useState(false)
   const [editing, setEditing] = useState<
@@ -91,7 +93,7 @@ export default function Dashboard() {
   const load = useCallback(async () => {
     setRefreshing(true)
     try {
-      const [entries, ccData, invData, budgets, fx, tickerData, fundData, splitData, cfgData] = await Promise.all([
+      const [entries, ccData, invData, budgets, fx, tickerData, fundData, splitData, cfgData, recData, obData] = await Promise.all([
         api<{ expenses: AppState["expenses"]; income: AppState["income"] }>("/api/entries"),
         api<{ cc: AppState["cc"]; settled: AppState["settled"] }>("/api/cc"),
         api<{ investments: AppState["investments"]; prices: AppState["prices"] }>("/api/investments"),
@@ -101,11 +103,15 @@ export default function Dashboard() {
         api<{ funds: Record<string, string> }>("/api/funds"),
         api<{ splits: typeof splits }>("/api/splits"),
         api<{ config: Record<string, CardConfig> }>("/api/cards/config"),
+        api<{ recurring: Recurring[] }>("/api/recurring"),
+        api<{ obligations: FutureObligation[] }>("/api/obligations"),
       ])
       setTickers(tickerData.tickers ?? {})
       setFunds(fundData.funds ?? {})
       setSplits(splitData.splits ?? {})
       setCardConfig(cfgData.config ?? {})
+      setRecurring(recData.recurring ?? [])
+      setObligations(obData.obligations ?? [])
       setState({
         expenses: entries.expenses, income: entries.income,
         cc: ccData.cc, settled: ccData.settled,
@@ -212,18 +218,6 @@ export default function Dashboard() {
   state.expenses.filter(e => inPrevMonth(e.date)).forEach(e => { catPrev[e.cat] = (catPrev[e.cat] ?? 0) + e.amount })
   ccExpanded.filter(e => inPrevMonth(e.date)).forEach(e => { catPrev[e.cat] = (catPrev[e.cat] ?? 0) + e.amount })
 
-  // 6-month series per category (for inline sparkbar). Same buckets as the
-  // global 6-month spending chart so colors / x-labels align.
-  const catSeries: Record<string, number[]> = {}
-  last6.forEach((p, i) => {
-    const periodExp = state.expenses.filter(e => { const d = new Date(e.date); return d.getMonth() === p.m && d.getFullYear() === p.y })
-    const periodCC = ccExpanded.filter(e => { const d = new Date(e.date); return d.getMonth() === p.m && d.getFullYear() === p.y })
-    for (const e of [...periodExp, ...periodCC]) {
-      if (!catSeries[e.cat]) catSeries[e.cat] = Array(6).fill(0)
-      catSeries[e.cat][i] += e.amount
-    }
-  })
-
   const last6 = Array.from({ length: 6 }, (_, i) => {
     const d = new Date(vy, vm - 5 + i, 1)
     return { m: d.getMonth(), y: d.getFullYear(), label: d.toLocaleString("en-US", { month: "short" }) }
@@ -245,6 +239,18 @@ export default function Dashboard() {
       .filter(e => { const d = new Date(e.date); return d.getFullYear() < p.y || (d.getFullYear() === p.y && d.getMonth() <= p.m) })
       .reduce((s, e) => s + e.amount, 0),
   }))
+
+  // 6-month series per category (for inline sparkbar). Same buckets as
+  // the global 6-month spending chart so colors / x-labels align.
+  const catSeries: Record<string, number[]> = {}
+  last6.forEach((p, i) => {
+    const periodExp = state.expenses.filter(e => { const d = new Date(e.date); return d.getMonth() === p.m && d.getFullYear() === p.y })
+    const periodCC  = ccExpanded.filter(e => { const d = new Date(e.date); return d.getMonth() === p.m && d.getFullYear() === p.y })
+    for (const e of [...periodExp, ...periodCC]) {
+      if (!catSeries[e.cat]) catSeries[e.cat] = Array(6).fill(0)
+      catSeries[e.cat][i] += e.amount
+    }
+  })
 
   // Cumulative net (income − expenses) at end of each month.
   // Investments don't reduce this — they're moved-aside money, not lost.
@@ -1374,6 +1380,8 @@ export default function Dashboard() {
                 funds={funds} setFunds={setFunds}
                 splits={splits} setSplits={setSplits}
                 cardConfig={cardConfig} setCardConfig={setCardConfig}
+                recurring={recurring} setRecurring={setRecurring}
+                obligations={obligations} setObligations={setObligations}
                 reload={load}
               />
             )}
