@@ -1,8 +1,9 @@
 "use client"
 import { useState } from "react"
-import { C } from "@/lib/utils"
+import { C, CC_CARDS } from "@/lib/utils"
 import { Card, Label, inp, lbl } from "./ui"
 import { Icon } from "./Icon"
+import { computeCycle, type CardConfig } from "@/lib/cardCycles"
 
 type SplitLeg = { name: string; weight: number; inv_type?: "fund" | "stock" }
 type SplitMap = Record<string, SplitLeg[]>
@@ -14,6 +15,8 @@ interface Props {
   setFunds: React.Dispatch<React.SetStateAction<Record<string, string>>>
   splits: SplitMap
   setSplits: React.Dispatch<React.SetStateAction<SplitMap>>
+  cardConfig: Record<string, CardConfig>
+  setCardConfig: React.Dispatch<React.SetStateAction<Record<string, CardConfig>>>
   reload: () => Promise<void>
 }
 
@@ -27,7 +30,7 @@ async function api<T>(path: string, method: string, body?: unknown): Promise<T> 
   return res.json()
 }
 
-export function MapsEditor({ tickers, setTickers, funds, setFunds, splits, setSplits, reload }: Props) {
+export function MapsEditor({ tickers, setTickers, funds, setFunds, splits, setSplits, cardConfig, setCardConfig, reload }: Props) {
   const [newTickerName, setNewTickerName] = useState("")
   const [newTickerSym, setNewTickerSym] = useState("")
   const [newFundName, setNewFundName] = useState("")
@@ -101,8 +104,34 @@ export function MapsEditor({ tickers, setTickers, funds, setFunds, splits, setSp
     color: C.text, outline: "none", boxSizing: "border-box",
   }
 
+  // ── Card cycles ──
+  const setCardCycle = async (card: string, cutoffDay: number, dueDay: number) => {
+    const out = await api<{ config: Record<string, CardConfig> }>("/api/cards/config", "PUT", { card, cutoffDay, dueDay })
+    setCardConfig(out.config)
+  }
+  const clearCardCycle = async (card: string) => {
+    if (!confirm(`Remove cycle config for ${card}?`)) return
+    const out = await api<{ config: Record<string, CardConfig> }>("/api/cards/config", "PUT", { card, cutoffDay: null, dueDay: null })
+    setCardConfig(out.config)
+  }
+
   return (
     <div style={{ marginTop: 12 }}>
+      {/* ── Card cycles ── */}
+      <Card style={{ padding: 16, marginBottom: 12 }}>
+        <Label>Card statement cycles</Label>
+        <div style={{ fontSize: 11, color: C.dim, marginBottom: 12 }}>
+          Set the day-of-month each card cuts and the day payment is due. If due day &lt; cutoff day, due falls in the following month.
+        </div>
+        {CC_CARDS.map(card => (
+          <CardCycleRow key={card} card={card}
+            cfg={cardConfig[card]}
+            onSave={(c, d) => setCardCycle(card, c, d)}
+            onClear={() => clearCardCycle(card)}
+          />
+        ))}
+      </Card>
+
       {/* ── Tickers ── */}
       <Card style={{ padding: 16, marginBottom: 12 }}>
         <Label>Stock tickers (Yahoo)</Label>
@@ -207,6 +236,70 @@ export function MapsEditor({ tickers, setTickers, funds, setFunds, splits, setSp
           </div>
         </div>
       </Card>
+    </div>
+  )
+}
+
+/** Inline-editable card cycle row */
+function CardCycleRow({ card, cfg, onSave, onClear }: {
+  card: string; cfg: CardConfig | undefined;
+  onSave: (cutoff: number, due: number) => Promise<void>;
+  onClear: () => Promise<void>;
+}) {
+  const [cutoff, setCutoff] = useState<number>(cfg?.cutoffDay ?? 15)
+  const [due,    setDue]    = useState<number>(cfg?.dueDay    ?? 5)
+  const [edit, setEdit] = useState(!cfg)
+  const cycle = cfg ? computeCycle(cfg) : null
+  const fmtDay = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+
+  return (
+    <div style={{ paddingBottom: 12, marginBottom: 12, borderBottom: `1px solid ${C.border}` }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+        <div style={{ fontSize: 13.5, fontWeight: 700, color: C.amber, flex: 1 }}>{card}</div>
+        {!edit && cfg && (
+          <>
+            <button onClick={() => setEdit(true)} style={{ padding: "5px 10px", fontSize: 10.5, fontWeight: 700, border: `1px solid ${C.border}`, borderRadius: 8, cursor: "pointer", background: "transparent", color: C.muted, fontFamily: "inherit" }}>Edit</button>
+            <button onClick={onClear} style={{ background: "none", border: "none", cursor: "pointer", color: C.dim, padding: 4 }}>
+              <Icon name="close" size={15} />
+            </button>
+          </>
+        )}
+      </div>
+      {!edit && cfg && cycle ? (
+        <div style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.6 }}>
+          Cuts day {cfg.cutoffDay} · due day {cfg.dueDay}{cfg.dueDay < cfg.cutoffDay ? " (next month)" : ""}<br/>
+          Next cutoff <span style={{ color: C.text }}>{fmtDay(cycle.nextCutoff)}</span> · last cutoff <span style={{ color: C.text }}>{fmtDay(cycle.lastCutoff)}</span><br/>
+          Statement due <span style={{ color: C.amber, fontWeight: 700 }}>{fmtDay(cycle.statementDue)}</span> ({cycle.daysUntilDue >= 0 ? `in ${cycle.daysUntilDue}d` : `${-cycle.daysUntilDue}d overdue`})
+        </div>
+      ) : (
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ fontSize: 11, color: C.muted }}>Cuts day</span>
+            <input type="number" min={1} max={31} value={cutoff}
+              onChange={e => setCutoff(Math.max(1, Math.min(31, parseInt(e.target.value) || 1)))}
+              style={{ width: 56, padding: "8px 10px", fontSize: 13, fontFamily: "inherit", border: `1px solid ${C.border}`, borderRadius: 8, background: C.bg, color: C.text, outline: "none" }}
+            />
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ fontSize: 11, color: C.muted }}>Due day</span>
+            <input type="number" min={1} max={31} value={due}
+              onChange={e => setDue(Math.max(1, Math.min(31, parseInt(e.target.value) || 1)))}
+              style={{ width: 56, padding: "8px 10px", fontSize: 13, fontFamily: "inherit", border: `1px solid ${C.border}`, borderRadius: 8, background: C.bg, color: C.text, outline: "none" }}
+            />
+          </div>
+          <div style={{ flex: 1 }} />
+          {cfg && (
+            <button onClick={() => { setEdit(false); setCutoff(cfg.cutoffDay); setDue(cfg.dueDay) }} style={{
+              padding: "7px 12px", fontSize: 11, fontWeight: 600, border: `1px solid ${C.border}`, borderRadius: 8,
+              cursor: "pointer", background: "transparent", color: C.muted, fontFamily: "inherit",
+            }}>Cancel</button>
+          )}
+          <button onClick={async () => { await onSave(cutoff, due); setEdit(false) }} style={{
+            padding: "7px 14px", fontSize: 11, fontWeight: 700, border: "none", borderRadius: 8,
+            cursor: "pointer", background: C.green, color: "#0E0F12", fontFamily: "inherit",
+          }}>Save</button>
+        </div>
+      )}
     </div>
   )
 }

@@ -25,4 +25,7 @@ export const KEYS = {
   learnedCats: "ft:learnedCats",   // Record<lowercase-keyword, Category>
                                    //   updated whenever the user submits an expense/CC entry —
                                    //   the entry name becomes a keyword that maps to its category.
+  cardConfig:  "ft:cardConfig",    // Record<card, { cutoffDay, dueDay }> — day-of-month for
+                                   //   statement cutoff and payment due. If dueDay < cutoffDay,
+                                   //   the due date falls in the following month.
 }

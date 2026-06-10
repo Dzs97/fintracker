@@ -16,6 +16,7 @@ import {
 } from "@/components/ui"
 import { SparkBar, LineChart, Donut } from "@/components/charts"
 import { MapsEditor } from "@/components/MapsEditor"
+import { computeCycle, partitionByCycle, fmtDueLabel, type CardConfig } from "@/lib/cardCycles"
 import { QuickLogSheet } from "@/components/QuickLogSheet"
 import { EditEntrySheet } from "@/components/EditEntrySheet"
 import type { Expense, Income, CCCharge } from "@/types"
@@ -51,6 +52,7 @@ export default function Dashboard() {
   const [tickers, setTickers] = useState<Record<string, string>>({})
   const [funds, setFunds] = useState<Record<string, string>>({})
   const [splits, setSplits] = useState<Record<string, Array<{ name: string; weight: number; inv_type?: "fund" | "stock" }>>>({})
+  const [cardConfig, setCardConfig] = useState<Record<string, CardConfig>>({})
   const [priceBusy, setPriceBusy] = useState(false)
   const [quickOpen, setQuickOpen] = useState(false)
   const [editing, setEditing] = useState<
@@ -88,7 +90,7 @@ export default function Dashboard() {
   const load = useCallback(async () => {
     setRefreshing(true)
     try {
-      const [entries, ccData, invData, budgets, fx, tickerData, fundData, splitData] = await Promise.all([
+      const [entries, ccData, invData, budgets, fx, tickerData, fundData, splitData, cfgData] = await Promise.all([
         api<{ expenses: AppState["expenses"]; income: AppState["income"] }>("/api/entries"),
         api<{ cc: AppState["cc"]; settled: AppState["settled"] }>("/api/cc"),
         api<{ investments: AppState["investments"]; prices: AppState["prices"] }>("/api/investments"),
@@ -97,10 +99,12 @@ export default function Dashboard() {
         api<{ tickers: Record<string, string> }>("/api/prices"),
         api<{ funds: Record<string, string> }>("/api/funds"),
         api<{ splits: typeof splits }>("/api/splits"),
+        api<{ config: Record<string, CardConfig> }>("/api/cards/config"),
       ])
       setTickers(tickerData.tickers ?? {})
       setFunds(fundData.funds ?? {})
       setSplits(splitData.splits ?? {})
+      setCardConfig(cfgData.config ?? {})
       setState({
         expenses: entries.expenses, income: entries.income,
         cc: ccData.cc, settled: ccData.settled,
@@ -683,28 +687,91 @@ export default function Dashboard() {
               <div style={{ fontSize: 36, fontWeight: 700, color: C.amber, letterSpacing: "-1.2px", lineHeight: 1 }}>
                 {fmt(ccPoolTotal)}<span style={{ fontSize: 16, fontWeight: 500, color: C.muted, marginLeft: 7 }}>MXN</span>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginTop: 16 }}>
-                {CC_CARDS.map(card => {
-                  const pool = ccPoolByCard[card] ?? 0
+            </Card>
+
+            {/* Per-card statement + due-date breakdown */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 14 }}>
+              {CC_CARDS.map(card => {
+                const pool = ccPoolByCard[card] ?? 0
+                const cfg = cardConfig[card]
+                const cardCharges = ccExpanded.filter(c => c.card === card)
+                const settledForCard = state.settled[card] ?? 0
+                if (!cfg) {
                   return (
-                    <div key={card} style={{ background: C.amberDim, borderRadius: 12, padding: 10, border: `1px solid ${C.amber}28` }}>
-                      <div style={{ fontSize: 10, color: C.amber, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 4, fontWeight: 600 }}>{card}</div>
-                      <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{fmt(pool)}</div>
+                    <Card key={card} style={{ padding: 14 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: C.amber, letterSpacing: "0.04em", textTransform: "uppercase" }}>{card}</div>
+                        <div style={{ fontSize: 17, fontWeight: 700, color: pool > 0 ? C.amber : C.muted, letterSpacing: "-0.3px" }}>{fmt(pool)} MXN</div>
+                      </div>
+                      <div style={{ fontSize: 11, color: C.dim }}>
+                        Set cutoff + due day in <span style={{ color: C.muted }}>Invest → Maps</span> to see statement + due date.
+                      </div>
                       {pool > 0 && (
                         <button onClick={() => settleCard(card)} style={{
-                          marginTop: 7, width: "100%", padding: "6px 4px", fontSize: 10,
-                          fontFamily: "inherit", fontWeight: 700, border: "none", borderRadius: 8,
-                          cursor: "pointer", background: C.green + "26", color: C.green,
-                          display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 4,
+                          marginTop: 10, padding: "8px 14px", fontSize: 12, fontFamily: "inherit", fontWeight: 700,
+                          border: "none", borderRadius: 10, cursor: "pointer", background: C.green + "26", color: C.green,
+                          display: "inline-flex", alignItems: "center", gap: 6,
                         }}>
-                          <Icon name="check" size={12} color={C.green} />Settle
+                          <Icon name="check" size={13} color={C.green} />Settle full balance
                         </button>
                       )}
-                    </div>
+                    </Card>
                   )
-                })}
-              </div>
-            </Card>
+                }
+                const cycle = computeCycle(cfg)
+                const parts = partitionByCycle(cardCharges, cycle)
+                const statementGross = parts.statement.reduce((s, c) => s + c.amount, 0)
+                const carryGross     = parts.carryover.reduce((s, c) => s + c.amount, 0)
+                const currentGross   = parts.current.reduce((s, c) => s + c.amount, 0)
+                // statement_balance = (everything billed before current cycle) − (what's been settled)
+                const billed = statementGross + carryGross
+                const statementBalance = Math.max(0, billed - settledForCard)
+                const urgent = cycle.daysUntilDue <= 3 && statementBalance > 0
+                const overdue = cycle.overdue && statementBalance > 0
+                const dueColor = overdue ? C.red : urgent ? C.amber : C.text
+                const dueLabel = fmtDueLabel(cycle.daysUntilDue)
+                return (
+                  <Card key={card} style={{ padding: 14, borderColor: overdue ? C.red + "55" : urgent ? C.amber + "55" : C.border }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: C.amber, letterSpacing: "0.04em", textTransform: "uppercase" }}>{card}</div>
+                        <div style={{ fontSize: 10.5, color: dueColor, marginTop: 3 }}>
+                          Due {cycle.statementDue.toLocaleDateString("en-US", { month: "short", day: "numeric" })} · <span style={{ fontWeight: 700 }}>{dueLabel}</span>
+                        </div>
+                      </div>
+                      <div style={{ textAlign: "right" }}>
+                        <div style={{ fontSize: 19, fontWeight: 700, color: dueColor, letterSpacing: "-0.4px" }}>{fmt(statementBalance)}</div>
+                        <div style={{ fontSize: 10, color: C.dim, marginTop: 2 }}>statement balance</div>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+                      <div style={{ flex: 1, background: C.bg, borderRadius: 10, padding: "8px 10px" }}>
+                        <div style={{ fontSize: 9, color: C.muted, letterSpacing: "0.04em" }}>CURRENT CYCLE</div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginTop: 2 }}>{fmt(currentGross)}</div>
+                        <div style={{ fontSize: 9.5, color: C.dim, marginTop: 2 }}>cuts {cycle.nextCutoff.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</div>
+                      </div>
+                      <div style={{ flex: 1, background: C.bg, borderRadius: 10, padding: "8px 10px" }}>
+                        <div style={{ fontSize: 9, color: C.muted, letterSpacing: "0.04em" }}>UNPAID TOTAL</div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginTop: 2 }}>{fmt(pool)}</div>
+                        <div style={{ fontSize: 9.5, color: C.dim, marginTop: 2 }}>statement + current</div>
+                      </div>
+                    </div>
+                    {pool > 0 && (
+                      <button onClick={() => settleCard(card)} style={{
+                        width: "100%", padding: "10px 14px", fontSize: 12, fontFamily: "inherit", fontWeight: 700,
+                        border: "none", borderRadius: 10, cursor: "pointer",
+                        background: urgent || overdue ? C.green : C.green + "26",
+                        color: urgent || overdue ? "#0E0F12" : C.green,
+                        display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
+                      }}>
+                        <Icon name="check" size={13} color={urgent || overdue ? "#0E0F12" : C.green} />
+                        Settle {fmt(pool)} MXN
+                      </button>
+                    )}
+                  </Card>
+                )
+              })}
+            </div>
 
             {showForm && ccForm()}
 
@@ -1243,6 +1310,7 @@ export default function Dashboard() {
                 tickers={tickers} setTickers={setTickers}
                 funds={funds} setFunds={setFunds}
                 splits={splits} setSplits={setSplits}
+                cardConfig={cardConfig} setCardConfig={setCardConfig}
                 reload={load}
               />
             )}
