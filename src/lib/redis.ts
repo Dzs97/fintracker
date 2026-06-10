@@ -28,4 +28,6 @@ export const KEYS = {
   cardConfig:  "ft:cardConfig",    // Record<card, { cutoffDay, dueDay }> — day-of-month for
                                    //   statement cutoff and payment due. If dueDay < cutoffDay,
                                    //   the due date falls in the following month.
+  statements:  "ft:statements",    // Statement[] — per-card per-period bank statements with
+                                   //   closingBalance (authoritative) and cumulative paid.
 }

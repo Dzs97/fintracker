@@ -2,7 +2,7 @@ import { redis, KEYS } from "./redis"
 import type { AppState } from "@/types"
 
 export async function getState(): Promise<AppState> {
-  const [expenses, income, cc, investments, settled, prices, budgets, fxRate] =
+  const [expenses, income, cc, investments, settled, prices, budgets, fxRate, statements] =
     await Promise.all([
       redis.get<AppState["expenses"]>(KEYS.expenses),
       redis.get<AppState["income"]>(KEYS.income),
@@ -12,6 +12,7 @@ export async function getState(): Promise<AppState> {
       redis.get<AppState["prices"]>(KEYS.prices),
       redis.get<AppState["budgets"]>(KEYS.budgets),
       redis.get<number>(KEYS.fxRate),
+      redis.get<AppState["statements"]>(KEYS.statements),
     ])
   return {
     expenses:    expenses    ?? [],
@@ -22,6 +23,7 @@ export async function getState(): Promise<AppState> {
     prices:      prices      ?? {},
     budgets:     budgets     ?? [],
     fxRate:      fxRate      ?? 17.3,
+    statements:  statements  ?? [],
   }
 }
 
@@ -35,5 +37,6 @@ export async function patchState(patch: Partial<AppState>) {
   if (patch.prices      !== undefined) ops.push(redis.set(KEYS.prices,      patch.prices))
   if (patch.budgets     !== undefined) ops.push(redis.set(KEYS.budgets,     patch.budgets))
   if (patch.fxRate      !== undefined) ops.push(redis.set(KEYS.fxRate,      patch.fxRate))
+  if (patch.statements  !== undefined) ops.push(redis.set(KEYS.statements,  patch.statements))
   await Promise.all(ops)
 }

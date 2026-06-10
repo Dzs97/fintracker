@@ -17,6 +17,7 @@ import {
 import { SparkBar, LineChart, Donut } from "@/components/charts"
 import { MapsEditor } from "@/components/MapsEditor"
 import { computeCycle, partitionByCycle, fmtDueLabel, type CardConfig } from "@/lib/cardCycles"
+import { StatementsPanel } from "@/components/StatementsPanel"
 import { QuickLogSheet } from "@/components/QuickLogSheet"
 import { EditEntrySheet } from "@/components/EditEntrySheet"
 import type { Expense, Income, CCCharge } from "@/types"
@@ -772,6 +773,8 @@ export default function Dashboard() {
                 )
               })}
             </div>
+
+            <StatementsPanel statements={state.statements ?? []} reload={load} />
 
             {showForm && ccForm()}
 

@@ -57,6 +57,20 @@ export interface Budget {
   limitMXN: number
 }
 
+/** A credit-card statement period.
+ *  - `closingBalance` is the amount actually printed on the bank statement.
+ *  - `paid` is the cumulative amount you've paid against it across one or more payments.
+ *  - `period` is the "YYYY-MM" of the cycle that CLOSED — typically the cutoff month. */
+export interface Statement {
+  id: string
+  card: CCCard | string
+  period: string         // "YYYY-MM"
+  closingBalance: number // MXN — from the actual bank statement
+  paid: number           // cumulative paid against this statement (MXN)
+  dueOn?: string         // YYYY-MM-DD
+  notes?: string
+}
+
 export interface AppState {
   expenses: Expense[]
   income: Income[]
@@ -66,4 +80,5 @@ export interface AppState {
   prices: Record<string, StockPrice>
   budgets: Budget[]
   fxRate: number
+  statements?: Statement[]
 }
