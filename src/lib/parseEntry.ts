@@ -11,17 +11,73 @@
  *   "3000 amex 3 msi nagaoka"   → CC w/ 3 installments
  */
 
+// Keyword → canonical category. Mix of English and Spanish so MX bank
+// statements (which are in Spanish) get parsed without needing a separate
+// language toggle. Order matters only for ties — case-insensitive substring match.
 const CATS: Record<string, string> = {
-  uber: "Transport", taxi: "Transport", metro: "Transport", gas: "Transport",
-  ubereats: "Food & Dining", restaurant: "Food & Dining", lunch: "Food & Dining",
-  coffee: "Food & Dining", cafe: "Food & Dining", dinner: "Food & Dining", nagaoka: "Food & Dining",
-  super: "Groceries", groceries: "Groceries", walmart: "Groceries", sumesa: "Groceries",
-  amazon: "Shopping", liverpool: "Shopping", zara: "Shopping",
-  netflix: "Entertainment", spotify: "Entertainment", cinema: "Entertainment",
-  gym: "Health", doctor: "Health", farmacia: "Health",
-  rent: "Housing", airbnb: "Housing",
-  sakura: "Pets", veterinaria: "Pets", petco: "Pets",
-  card: "Card Payments",
+  // ── Transport ────────────────────────────────────────────────
+  uber: "Transport", taxi: "Transport", metro: "Transport",
+  gas: "Transport", gasolina: "Transport", pemex: "Transport",
+  didi: "Transport", cabify: "Transport", transporte: "Transport",
+  flecha: "Transport", ado: "Transport",
+  estacionamiento: "Transport", parquimetro: "Transport", parking: "Transport",
+  peaje: "Transport", caseta: "Transport",
+
+  // ── Food & Dining ────────────────────────────────────────────
+  ubereats: "Food & Dining", "uber eats": "Food & Dining", rappi: "Food & Dining",
+  doordash: "Food & Dining", "didi food": "Food & Dining", didifood: "Food & Dining",
+  restaurant: "Food & Dining", restaurante: "Food & Dining",
+  comida: "Food & Dining", lunch: "Food & Dining", almuerzo: "Food & Dining",
+  desayuno: "Food & Dining", dinner: "Food & Dining", cena: "Food & Dining",
+  coffee: "Food & Dining", cafe: "Food & Dining", cafeteria: "Food & Dining",
+  starbucks: "Food & Dining", nagaoka: "Food & Dining", bar: "Food & Dining",
+  panaderia: "Food & Dining", taqueria: "Food & Dining", taco: "Food & Dining",
+
+  // ── Groceries ────────────────────────────────────────────────
+  super: "Groceries", supermercado: "Groceries", groceries: "Groceries",
+  walmart: "Groceries", soriana: "Groceries", chedraui: "Groceries",
+  costco: "Groceries", sams: "Groceries", sumesa: "Groceries",
+  mercado: "Groceries", aurrera: "Groceries", heb: "Groceries",
+  fruteria: "Groceries", carniceria: "Groceries",
+
+  // ── Shopping ─────────────────────────────────────────────────
+  amazon: "Shopping", mercadolibre: "Shopping", "mercado libre": "Shopping",
+  liverpool: "Shopping", zara: "Shopping", sears: "Shopping",
+  palacio: "Shopping", sanborns: "Shopping", shein: "Shopping",
+  ropa: "Shopping", boutique: "Shopping",
+
+  // ── Entertainment ────────────────────────────────────────────
+  netflix: "Entertainment", spotify: "Entertainment", "hbo": "Entertainment",
+  disney: "Entertainment", "apple tv": "Entertainment", appletv: "Entertainment",
+  prime: "Entertainment", crunchyroll: "Entertainment",
+  cinema: "Entertainment", cine: "Entertainment", cinepolis: "Entertainment",
+  cinemex: "Entertainment", boletos: "Entertainment", ticketmaster: "Entertainment",
+  concierto: "Entertainment", musica: "Entertainment",
+
+  // ── Health ───────────────────────────────────────────────────
+  gym: "Health", gimnasio: "Health", smartfit: "Health",
+  doctor: "Health", medico: "Health", dentista: "Health", dentist: "Health",
+  hospital: "Health", clinica: "Health", consultorio: "Health",
+  farmacia: "Health", pharmacy: "Health", medicines: "Health", medicinas: "Health",
+  medicamento: "Health", medicamentos: "Health", laboratorio: "Health",
+  optica: "Health", oftalmologo: "Health",
+
+  // ── Housing ──────────────────────────────────────────────────
+  rent: "Housing", renta: "Housing", airbnb: "Housing",
+  hipoteca: "Housing", hospedaje: "Housing", servicios: "Housing",
+  luz: "Housing", agua: "Housing", internet: "Housing", telmex: "Housing",
+  izzi: "Housing", cfe: "Housing", "gas natural": "Housing",
+  predial: "Housing", mantenimiento: "Housing",
+
+  // ── Pets ─────────────────────────────────────────────────────
+  sakura: "Pets", veterinaria: "Pets", veterinario: "Pets",
+  vet: "Pets", petco: "Pets", maskota: "Pets", mascota: "Pets",
+  perro: "Pets", gato: "Pets", croquetas: "Pets",
+
+  // ── Card Payments / Transfers ─────────────────────────────────
+  card: "Card Payments", "pago tarjeta": "Card Payments",
+  "pago de tarjeta": "Card Payments", statement: "Card Payments",
+  spei: "Card Payments", transferencia: "Card Payments",
 }
 
 const CC_CARDS = ["openbank", "amex", "invex"]
@@ -48,15 +104,22 @@ function today(): string {
   return new Date().toISOString().split("T")[0]
 }
 
+// Sort dict entries by key length DESC so a longer key like "gas natural"
+// is tested before the shorter "gas" — otherwise multi-word categories lose.
+function sortedEntries(d: Record<string, string>): Array<[string, string]> {
+  return Object.entries(d).sort((a, b) => b[0].length - a[0].length)
+}
+const CATS_SORTED = sortedEntries(CATS)
+
 function guessCategory(text: string, learned?: Record<string, string>): string {
   const lower = text.toLowerCase()
-  // User overrides come first — most specific
+  // User overrides come first — most specific. Also length-sorted.
   if (learned) {
-    for (const [k, v] of Object.entries(learned)) {
+    for (const [k, v] of sortedEntries(learned)) {
       if (lower.includes(k)) return v
     }
   }
-  for (const [k, v] of Object.entries(CATS)) {
+  for (const [k, v] of CATS_SORTED) {
     if (lower.includes(k)) return v
   }
   return "Other"
