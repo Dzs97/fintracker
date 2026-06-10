@@ -119,18 +119,33 @@ async function decrementObligations(now: Date): Promise<Array<{ card: string; pe
   if (obligations.length === 0) return []
   const lastDec = (await redis.get<Record<string, string>>(KEYS.oblLastDec)) ?? {}
   const result: Array<{ card: string; period: string; decremented: number; removed: number }> = []
-  // Decide per card whether we owe a decrement this cycle
+  // Decide per card whether we owe a decrement this cycle.
+  // First-time-seen cards are RECORDED but NOT decremented — the user's
+  // monthsRemaining is assumed to already exclude the just-closed cycle.
+  // Only actual transitions to a NEW cycle trigger a tick.
   const cardsToTick = new Set<string>()
+  let lastDecDirty = false
   for (const [card, c] of Object.entries(cfg)) {
     const cycle = computeCycle(c, now)
     const period = periodOf(cycle.lastCutoff)
+    if (lastDec[card] === undefined) {
+      // First sighting — seed lastDec without ticking
+      lastDec[card] = period
+      lastDecDirty = true
+      continue
+    }
     if (now >= cycle.lastCutoff && lastDec[card] !== period) {
       cardsToTick.add(card)
       lastDec[card] = period
+      lastDecDirty = true
       result.push({ card, period, decremented: 0, removed: 0 })
     }
   }
-  if (cardsToTick.size === 0) return []
+  if (cardsToTick.size === 0) {
+    // Persist lastDec for any first-time-seen cards
+    if (lastDecDirty) await redis.set(KEYS.oblLastDec, lastDec)
+    return []
+  }
   const next: FutureObligation[] = []
   for (const o of obligations) {
     if (cardsToTick.has(o.card)) {
