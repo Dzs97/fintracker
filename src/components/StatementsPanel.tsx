@@ -33,6 +33,7 @@ export function StatementsPanel({ statements, reload }: Props) {
     period: thisPeriod(),
     closingBalance: "",
     totalOwed: "",
+    pagoMinimo: "",
     paid: "",
     dueOn: "",
     notes: "",
@@ -46,11 +47,12 @@ export function StatementsPanel({ statements, reload }: Props) {
       card: form.card, period: form.period,
       closingBalance: parseFloat(form.closingBalance),
       totalOwed: form.totalOwed ? parseFloat(form.totalOwed) : undefined,
+      pagoMinimo: form.pagoMinimo ? parseFloat(form.pagoMinimo) : undefined,
       paid: parseFloat(form.paid || "0"),
       dueOn: form.dueOn || undefined,
       notes: form.notes || undefined,
     })
-    setForm({ ...form, closingBalance: "", totalOwed: "", paid: "", dueOn: "", notes: "" })
+    setForm({ ...form, closingBalance: "", totalOwed: "", pagoMinimo: "", paid: "", dueOn: "", notes: "" })
     setAdding(false)
     await reload()
   }
@@ -124,6 +126,10 @@ export function StatementsPanel({ statements, reload }: Props) {
           <input style={inp} type="number" min="0" step="0.01" value={form.totalOwed}
             onChange={e => setForm({ ...form, totalOwed: e.target.value })}
             placeholder="Total debt incl. future MSI tail — informational only" />
+          <label style={lbl}>Pago mínimo (optional)</label>
+          <input style={inp} type="number" min="0" step="0.01" value={form.pagoMinimo}
+            onChange={e => setForm({ ...form, pagoMinimo: e.target.value })}
+            placeholder="Minimum payment to stay current (interest accrues on remainder)" />
           <label style={lbl}>Notes</label>
           <input style={inp} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })}
             placeholder="Optional — e.g. 'paid in full Jun 5'" />
@@ -160,6 +166,11 @@ export function StatementsPanel({ statements, reload }: Props) {
                 <div style={{ fontSize: 11, color: C.muted }}>
                   Closing {fmt(s.closingBalance)} · paid {fmt(s.paid)}{s.dueOn ? ` · due ${fmtDate(s.dueOn)}` : ""}
                 </div>
+                {s.pagoMinimo != null && s.pagoMinimo > 0 && (
+                  <div style={{ fontSize: 10.5, color: C.dim, marginTop: 2 }}>
+                    Pago mínimo <span style={{ color: C.muted }}>{fmt(s.pagoMinimo)}</span>
+                  </div>
+                )}
                 {s.totalOwed != null && s.totalOwed > s.closingBalance && (
                   <div style={{ fontSize: 10.5, color: C.dim, marginTop: 2 }}>
                     Saldo deudor total <span style={{ color: C.muted }}>{fmt(s.totalOwed)}</span> (incl. future MSI tail)
@@ -194,6 +205,28 @@ export function StatementsPanel({ statements, reload }: Props) {
             )}
             {payingId === s.id && (
               <div style={{ marginTop: 10, padding: 10, background: C.bg, borderRadius: 10, border: `1px solid ${C.border}` }}>
+                {/* Quick-fill buttons */}
+                {(() => {
+                  const remStmt = Math.max(0, s.closingBalance - s.paid)
+                  const remTotal = s.totalOwed != null ? Math.max(0, s.totalOwed - s.paid) : null
+                  const min = s.pagoMinimo
+                  const presets: Array<{ label: string; amount: number; color: string }> = []
+                  if (min && min > 0) presets.push({ label: `Mínimo · ${fmt(min)}`, amount: min, color: C.muted })
+                  if (remStmt > 0) presets.push({ label: `Sin intereses · ${fmt(remStmt)}`, amount: remStmt, color: C.green })
+                  if (remTotal != null && remTotal > remStmt) presets.push({ label: `Saldo total · ${fmt(remTotal)}`, amount: remTotal, color: C.amber })
+                  if (presets.length === 0) return null
+                  return (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+                      {presets.map(p => (
+                        <button key={p.label} onClick={() => setPayForm({ ...payForm, amount: String(p.amount.toFixed(2)) })} style={{
+                          padding: "6px 10px", fontSize: 10.5, fontFamily: "inherit", fontWeight: 700,
+                          border: `1px solid ${p.color}55`, borderRadius: 100, cursor: "pointer",
+                          background: p.color + "1F", color: p.color,
+                        }}>{p.label}</button>
+                      ))}
+                    </div>
+                  )
+                })()}
                 <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 8, marginBottom: 8 }}>
                   <div>
                     <div style={{ fontSize: 10, color: C.muted, marginBottom: 4, letterSpacing: "0.04em" }}>AMOUNT (MXN)</div>

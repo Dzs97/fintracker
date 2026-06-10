@@ -69,6 +69,8 @@ export interface Statement {
   closingBalance: number // MXN — the "pay this to avoid interest" headline number
   totalOwed?: number     // MXN — the "saldo deudor total" (includes future MSI tail);
                          //   displayed as secondary info for context, NOT what gets paid.
+  pagoMinimo?: number    // MXN — the minimum payment required to stay current (interest accrues on
+                         //   the rolled-over balance). Used to quick-fill the Record payment form.
   paid: number           // cumulative paid against this statement (MXN)
   dueOn?: string         // YYYY-MM-DD
   notes?: string
