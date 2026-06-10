@@ -207,6 +207,23 @@ export default function Dashboard() {
   monthCC.forEach(e  => { catTotals[e.cat] = (catTotals[e.cat] ?? 0) + e.amount })
   const catGrand = Object.values(catTotals).reduce((s, v) => s + v, 0)
 
+  // Previous-month totals per category for delta display
+  const catPrev: Record<string, number> = {}
+  state.expenses.filter(e => inPrevMonth(e.date)).forEach(e => { catPrev[e.cat] = (catPrev[e.cat] ?? 0) + e.amount })
+  ccExpanded.filter(e => inPrevMonth(e.date)).forEach(e => { catPrev[e.cat] = (catPrev[e.cat] ?? 0) + e.amount })
+
+  // 6-month series per category (for inline sparkbar). Same buckets as the
+  // global 6-month spending chart so colors / x-labels align.
+  const catSeries: Record<string, number[]> = {}
+  last6.forEach((p, i) => {
+    const periodExp = state.expenses.filter(e => { const d = new Date(e.date); return d.getMonth() === p.m && d.getFullYear() === p.y })
+    const periodCC = ccExpanded.filter(e => { const d = new Date(e.date); return d.getMonth() === p.m && d.getFullYear() === p.y })
+    for (const e of [...periodExp, ...periodCC]) {
+      if (!catSeries[e.cat]) catSeries[e.cat] = Array(6).fill(0)
+      catSeries[e.cat][i] += e.amount
+    }
+  })
+
   const last6 = Array.from({ length: 6 }, (_, i) => {
     const d = new Date(vy, vm - 5 + i, 1)
     return { m: d.getMonth(), y: d.getFullYear(), label: d.toLocaleString("en-US", { month: "short" }) }
@@ -569,6 +586,9 @@ export default function Dashboard() {
                   <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 9, minWidth: 0 }}>
                     {Object.entries(catTotals).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([cat, amt]) => {
                       const pct = Math.round(amt / catGrand * 100)
+                      const prev = catPrev[cat] ?? 0
+                      const delta = prev === 0 ? null : ((amt - prev) / prev) * 100
+                      const dColor = delta === null ? C.dim : delta >= 0 ? C.red : C.green   // spending up = red
                       return (
                         <div key={cat}>
                           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
@@ -576,7 +596,14 @@ export default function Dashboard() {
                               <span style={{ width: 7, height: 7, borderRadius: "50%", background: CAT_COLORS[cat] ?? C.muted, flexShrink: 0 }} />
                               <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cat}</span>
                             </span>
-                            <span style={{ fontSize: 11.5, color: C.muted, flexShrink: 0, marginLeft: 8 }}>{pct}%</span>
+                            <span style={{ fontSize: 11.5, color: C.muted, flexShrink: 0, marginLeft: 8, display: "inline-flex", alignItems: "center", gap: 6 }}>
+                              {delta !== null && (
+                                <span style={{ fontSize: 9.5, color: dColor, fontWeight: 700 }}>
+                                  {delta >= 0 ? "↑" : "↓"}{Math.abs(delta).toFixed(0)}%
+                                </span>
+                              )}
+                              <span>{pct}%</span>
+                            </span>
                           </div>
                           <div style={{ background: C.border, borderRadius: 20, height: 4, overflow: "hidden" }}>
                             <div style={{ width: pct + "%", height: "100%", borderRadius: 20, background: CAT_COLORS[cat] ?? C.muted, transition: "width .4s" }} />
@@ -585,6 +612,39 @@ export default function Dashboard() {
                       )
                     })}
                   </div>
+                </div>
+              </Card>
+            )}
+
+            {/* Per-category 6-month trend (top 5 by current-month spend) */}
+            {Object.keys(catTotals).length > 0 && (
+              <Card style={{ padding: 16, marginBottom: 14 }}>
+                <Label>Trends · last 6 mo</Label>
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  {Object.entries(catTotals).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([cat]) => {
+                    const series = catSeries[cat] ?? Array(6).fill(0)
+                    const max = Math.max(...series, 1)
+                    return (
+                      <div key={cat} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <span style={{ fontSize: 11.5, color: C.text, display: "inline-flex", alignItems: "center", gap: 6, flexShrink: 0, width: 110 }}>
+                          <span style={{ width: 7, height: 7, borderRadius: "50%", background: CAT_COLORS[cat] ?? C.muted }} />
+                          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cat}</span>
+                        </span>
+                        <svg viewBox="0 0 120 28" style={{ flex: 1, height: 28, display: "block" }}>
+                          {series.map((v, i) => {
+                            const bw = 14, gap = 4
+                            const x = i * (bw + gap)
+                            const h = Math.max(2, (v / max) * 24)
+                            return <rect key={i} x={x} y={28 - h} width={bw} height={h} rx={2} fill={CAT_COLORS[cat] ?? C.muted} opacity={0.85} />
+                          })}
+                        </svg>
+                        <span style={{ fontSize: 11, color: C.muted, flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{fmt(series[series.length - 1])}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+                <div style={{ fontSize: 9, color: C.dim, marginTop: 8, display: "flex", justifyContent: "space-between", marginLeft: 120 }}>
+                  {last6.map(p => <span key={p.label}>{p.label}</span>)}
                 </div>
               </Card>
             )}
