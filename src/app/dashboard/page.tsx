@@ -840,6 +840,73 @@ export default function Dashboard() {
               })}
             </div>
 
+            {/* MSI / financing forecast — next 12 months locked-in */}
+            {obligations.length > 0 && (() => {
+              const HORIZON = 12
+              // Group by card, compute monthly buckets for the next HORIZON months
+              const byCard: Record<string, number[]> = {}
+              const totalByMonth = Array(HORIZON).fill(0)
+              for (const o of obligations) {
+                if (!byCard[o.card]) byCard[o.card] = Array(HORIZON).fill(0)
+                for (let i = 0; i < Math.min(o.monthsRemaining, HORIZON); i++) {
+                  byCard[o.card][i] += o.monthlyAmount
+                  totalByMonth[i] += o.monthlyAmount
+                }
+              }
+              const totalLocked = totalByMonth.reduce((s, v) => s + v, 0)
+              const nextMonthByCard: Record<string, number> = {}
+              for (const [card, arr] of Object.entries(byCard)) nextMonthByCard[card] = arr[0]
+              const maxBar = Math.max(...totalByMonth, 1)
+              const months = Array.from({ length: HORIZON }, (_, i) => {
+                const d = new Date()
+                d.setMonth(d.getMonth() + i)
+                return d.toLocaleString("en-US", { month: "short" })
+              })
+              return (
+                <Card style={{ padding: 16, marginBottom: 14, borderColor: C.amber + "33" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 10 }}>
+                    <Label style={{ marginBottom: 0 }}>Locked-in MSI · next {HORIZON} mo</Label>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontSize: 18, fontWeight: 700, color: C.amber, letterSpacing: "-0.4px" }}>
+                        {fmt(totalLocked)} <span style={{ fontSize: 10, color: C.muted, fontWeight: 500 }}>MXN</span>
+                      </div>
+                      <div style={{ fontSize: 10, color: C.dim, marginTop: 2 }}>
+                        next month {fmt(totalByMonth[0])} across {Object.keys(byCard).length} cards
+                      </div>
+                    </div>
+                  </div>
+                  <svg viewBox="0 0 360 70" style={{ width: "100%", height: 70, display: "block" }}>
+                    {totalByMonth.map((v, i) => {
+                      const bw = 24, gap = 6
+                      const x = i * (bw + gap)
+                      const h = (v / maxBar) * 60
+                      return (
+                        <g key={i}>
+                          <rect x={x} y={64 - h} width={bw} height={h} rx={3} fill={C.amber} opacity={0.85} />
+                          <text x={x + bw / 2} y={70} textAnchor="middle" fontSize={8} fill={C.dim}>{months[i]}</text>
+                          <title>{months[i]}: {fmt(v)}</title>
+                        </g>
+                      )
+                    })}
+                  </svg>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
+                    {Object.entries(nextMonthByCard).map(([card, amt]) => (
+                      <div key={card} style={{
+                        padding: "6px 11px", background: C.amberDim, border: `1px solid ${C.amber}28`, borderRadius: 100,
+                        fontSize: 11, color: C.text, display: "inline-flex", alignItems: "center", gap: 6,
+                      }}>
+                        <span style={{ fontSize: 10, color: C.amber, fontWeight: 700 }}>{card}</span>
+                        <span style={{ fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>{fmt(amt)}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ fontSize: 10, color: C.dim, marginTop: 8 }}>
+                    Manage obligations in Invest → Maps → Future MSI obligations.
+                  </div>
+                </Card>
+              )
+            })()}
+
             <StatementsPanel statements={state.statements ?? []} reload={load} />
 
             {showForm && ccForm()}
