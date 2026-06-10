@@ -42,9 +42,8 @@ const CATS: Record<string, string> = {
 
   // ── Shopping ─────────────────────────────────────────────────
   amazon: "Shopping", mercadolibre: "Shopping", "mercado libre": "Shopping",
-  liverpool: "Shopping", zara: "Shopping", sears: "Shopping",
-  palacio: "Shopping", sanborns: "Shopping", shein: "Shopping",
-  ropa: "Shopping", boutique: "Shopping",
+  liverpool: "Shopping", sears: "Shopping",
+  palacio: "Shopping", sanborns: "Shopping",
 
   // ── Entertainment ────────────────────────────────────────────
   netflix: "Entertainment", spotify: "Entertainment", "hbo": "Entertainment",
@@ -101,6 +100,7 @@ const CATS: Record<string, string> = {
   shein: "Clothes", "old navy": "Clothes", oldnavy: "Clothes",
   uniqlo: "Clothes", forever21: "Clothes", "forever 21": "Clothes",
   pull: "Clothes", bershka: "Clothes", boutique: "Clothes",
+  ropa: "Clothes", zara: "Clothes",
 }
 
 const CC_CARDS = ["openbank", "amex", "invex"]
