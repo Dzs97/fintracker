@@ -1,7 +1,8 @@
 export type Category =
   | "Food & Dining" | "Transport" | "Housing" | "Health"
   | "Entertainment" | "Shopping" | "Card Payments" | "Pets"
-  | "Groceries" | "Other"
+  | "Groceries" | "Furniture" | "Gifts" | "House Supplies"
+  | "Clothes" | "Other"
 
 export type CCCard = "OpenBank" | "Amex" | "Invex"
 export type InvType = "fund" | "stock"
@@ -65,7 +66,9 @@ export interface Statement {
   id: string
   card: CCCard | string
   period: string         // "YYYY-MM"
-  closingBalance: number // MXN — from the actual bank statement
+  closingBalance: number // MXN — the "pay this to avoid interest" headline number
+  totalOwed?: number     // MXN — the "saldo deudor total" (includes future MSI tail);
+                         //   displayed as secondary info for context, NOT what gets paid.
   paid: number           // cumulative paid against this statement (MXN)
   dueOn?: string         // YYYY-MM-DD
   notes?: string

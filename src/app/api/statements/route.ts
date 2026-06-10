@@ -28,6 +28,7 @@ export async function POST(req: NextRequest) {
     card: body.card,
     period: body.period,
     closingBalance: Number(body.closingBalance) || 0,
+    totalOwed: body.totalOwed != null ? Number(body.totalOwed) : undefined,
     paid: Number(body.paid) || 0,
     dueOn: body.dueOn,
     notes: body.notes,

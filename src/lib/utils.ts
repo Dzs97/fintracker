@@ -34,16 +34,20 @@ export const C = {
 export const FX_FALLBACK = 17.3
 
 export const CAT_COLORS: Record<string, string> = {
-  "Food & Dining": "#FF9D68",
-  "Transport":     "#47CBFF",
-  "Housing":       "#04D77F",
-  "Health":        "#EF7D98",
-  "Entertainment": "#A996FF",
-  "Shopping":      "#FFC83D",
-  "Card Payments": "#FF5B6B",
-  "Pets":          "#5BD1B0",
-  "Groceries":     "#7CDCA6",
-  "Other":         "#8E8F95",
+  "Food & Dining":  "#FF9D68",
+  "Transport":      "#47CBFF",
+  "Housing":        "#04D77F",
+  "Health":         "#EF7D98",
+  "Entertainment":  "#A996FF",
+  "Shopping":       "#FFC83D",
+  "Card Payments":  "#FF5B6B",
+  "Pets":           "#5BD1B0",
+  "Groceries":      "#7CDCA6",
+  "Furniture":      "#D4A373",   // warm tan
+  "Gifts":          "#FF6BAA",   // rose
+  "House Supplies": "#9B7FE0",   // lavender
+  "Clothes":        "#FFD166",   // mustard
+  "Other":          "#8E8F95",
 }
 export const CATS = Object.keys(CAT_COLORS) as Array<keyof typeof CAT_COLORS>
 

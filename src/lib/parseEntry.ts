@@ -78,6 +78,29 @@ const CATS: Record<string, string> = {
   card: "Card Payments", "pago tarjeta": "Card Payments",
   "pago de tarjeta": "Card Payments", statement: "Card Payments",
   spei: "Card Payments", transferencia: "Card Payments",
+
+  // ── Furniture ─────────────────────────────────────────────────
+  ikea: "Furniture", luuna: "Furniture", sofa: "Furniture",
+  mueble: "Furniture", muebles: "Furniture", muebleria: "Furniture",
+  colchon: "Furniture", "casa rodrigu": "Furniture",
+  casarodrigu: "Furniture", "mercado libre muebles": "Furniture",
+
+  // ── Gifts ─────────────────────────────────────────────────────
+  enviaflores: "Gifts", "envia flores": "Gifts", flores: "Gifts",
+  regalo: "Gifts", regalos: "Gifts", gift: "Gifts", florist: "Gifts",
+
+  // ── House Supplies ────────────────────────────────────────────
+  "casa caliza": "House Supplies", casacaliza: "House Supplies",
+  caliza: "House Supplies", "home depot": "House Supplies",
+  homedepot: "House Supplies", ferreteria: "House Supplies",
+  sodimac: "House Supplies", truper: "House Supplies",
+  "the home store": "House Supplies",
+
+  // ── Clothes ───────────────────────────────────────────────────
+  blacornio: "Clothes", "h&m": "Clothes", hennes: "Clothes",
+  shein: "Clothes", "old navy": "Clothes", oldnavy: "Clothes",
+  uniqlo: "Clothes", forever21: "Clothes", "forever 21": "Clothes",
+  pull: "Clothes", bershka: "Clothes", boutique: "Clothes",
 }
 
 const CC_CARDS = ["openbank", "amex", "invex"]

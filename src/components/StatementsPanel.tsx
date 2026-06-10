@@ -32,6 +32,7 @@ export function StatementsPanel({ statements, reload }: Props) {
     card: "OpenBank" as (typeof CC_CARDS)[number],
     period: thisPeriod(),
     closingBalance: "",
+    totalOwed: "",
     paid: "",
     dueOn: "",
     notes: "",
@@ -44,11 +45,12 @@ export function StatementsPanel({ statements, reload }: Props) {
     await api("/api/statements", "POST", {
       card: form.card, period: form.period,
       closingBalance: parseFloat(form.closingBalance),
+      totalOwed: form.totalOwed ? parseFloat(form.totalOwed) : undefined,
       paid: parseFloat(form.paid || "0"),
       dueOn: form.dueOn || undefined,
       notes: form.notes || undefined,
     })
-    setForm({ ...form, closingBalance: "", paid: "", dueOn: "", notes: "" })
+    setForm({ ...form, closingBalance: "", totalOwed: "", paid: "", dueOn: "", notes: "" })
     setAdding(false)
     await reload()
   }
@@ -118,6 +120,10 @@ export function StatementsPanel({ statements, reload }: Props) {
                 onChange={e => setForm({ ...form, paid: e.target.value })} placeholder="0.00" />
             </div>
           </div>
+          <label style={lbl}>Saldo deudor total (optional)</label>
+          <input style={inp} type="number" min="0" step="0.01" value={form.totalOwed}
+            onChange={e => setForm({ ...form, totalOwed: e.target.value })}
+            placeholder="Total debt incl. future MSI tail — informational only" />
           <label style={lbl}>Notes</label>
           <input style={inp} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })}
             placeholder="Optional — e.g. 'paid in full Jun 5'" />
@@ -154,6 +160,11 @@ export function StatementsPanel({ statements, reload }: Props) {
                 <div style={{ fontSize: 11, color: C.muted }}>
                   Closing {fmt(s.closingBalance)} · paid {fmt(s.paid)}{s.dueOn ? ` · due ${fmtDate(s.dueOn)}` : ""}
                 </div>
+                {s.totalOwed != null && s.totalOwed > s.closingBalance && (
+                  <div style={{ fontSize: 10.5, color: C.dim, marginTop: 2 }}>
+                    Saldo deudor total <span style={{ color: C.muted }}>{fmt(s.totalOwed)}</span> (incl. future MSI tail)
+                  </div>
+                )}
                 {s.notes && <div style={{ fontSize: 10.5, color: C.dim, marginTop: 2 }}>{s.notes}</div>}
               </div>
               <div style={{ textAlign: "right", flexShrink: 0 }}>
