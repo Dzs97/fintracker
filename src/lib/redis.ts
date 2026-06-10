@@ -37,4 +37,7 @@ export const KEYS = {
   backupIdx:   "ft:backup:idx",    // string[] — list of dates (YYYY-MM-DD) of stored snapshots,
                                    //   rotated to keep the most recent N. Each snapshot is at
                                    //   `ft:backup:<date>`.
+  oblLastDec:  "ft:obligationsLastDec",  // Record<card, "YYYY-MM"> — last cycle period for which
+                                         //   each card's obligations were auto-decremented.
+                                         //   Prevents the daily cron from over-decrementing.
 }

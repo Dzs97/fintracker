@@ -6,7 +6,7 @@ import { getFintualPrice } from "@/lib/fintual"
 import { computeCycle, type CardConfig } from "@/lib/cardCycles"
 import { nanoid } from "@/lib/utils"
 import type {
-  Statement, Recurring, Expense, Income, CCCharge, Investment,
+  Statement, Recurring, FutureObligation, Expense, Income, CCCharge, Investment,
 } from "@/types"
 
 /**
@@ -112,6 +112,47 @@ async function fireRecurring(now: Date): Promise<Array<{ name: string; type: str
   return fired
 }
 
+async function decrementObligations(now: Date): Promise<Array<{ card: string; period: string; decremented: number; removed: number }>> {
+  const cfg = (await redis.get<Record<string, CardConfig>>(KEYS.cardConfig)) ?? {}
+  if (Object.keys(cfg).length === 0) return []
+  const obligations = (await redis.get<FutureObligation[]>(KEYS.obligations)) ?? []
+  if (obligations.length === 0) return []
+  const lastDec = (await redis.get<Record<string, string>>(KEYS.oblLastDec)) ?? {}
+  const result: Array<{ card: string; period: string; decremented: number; removed: number }> = []
+  // Decide per card whether we owe a decrement this cycle
+  const cardsToTick = new Set<string>()
+  for (const [card, c] of Object.entries(cfg)) {
+    const cycle = computeCycle(c, now)
+    const period = periodOf(cycle.lastCutoff)
+    if (now >= cycle.lastCutoff && lastDec[card] !== period) {
+      cardsToTick.add(card)
+      lastDec[card] = period
+      result.push({ card, period, decremented: 0, removed: 0 })
+    }
+  }
+  if (cardsToTick.size === 0) return []
+  const next: FutureObligation[] = []
+  for (const o of obligations) {
+    if (cardsToTick.has(o.card)) {
+      const remaining = o.monthsRemaining - 1
+      const entry = result.find(r => r.card === o.card)!
+      entry.decremented += 1
+      if (remaining > 0) {
+        next.push({ ...o, monthsRemaining: remaining })
+      } else {
+        entry.removed += 1
+      }
+    } else {
+      next.push(o)
+    }
+  }
+  await Promise.all([
+    redis.set(KEYS.obligations, next),
+    redis.set(KEYS.oblLastDec, lastDec),
+  ])
+  return result
+}
+
 const MAX_BACKUPS = 14
 
 async function snapshotBackup(now: Date): Promise<{ date: string; kept: number }> {
@@ -140,9 +181,10 @@ function authorized(req: NextRequest) {
 
 async function run() {
   const now = new Date()
-  const [prices, newStatements, fired, backup] = await Promise.all([
+  const [prices, newStatements, decremented, fired, backup] = await Promise.all([
     refreshPrices(),
     autoCreateStatements(now),
+    decrementObligations(now),
     fireRecurring(now),
     snapshotBackup(now),
   ])
@@ -151,6 +193,7 @@ async function run() {
     ranAt: now.toISOString(),
     prices,
     autoCreatedStatements: newStatements,
+    obligationsDecremented: decremented,
     recurringFired: fired,
     backup,
   }

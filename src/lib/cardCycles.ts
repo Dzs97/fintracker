@@ -105,6 +105,26 @@ export function partitionByCycle<T extends { date: string }>(
   return { carryover, statement, current }
 }
 
+/**
+ * Resolve the start/end dates of the cycle that closed in `period` ("YYYY-MM").
+ * Useful for reconciling a statement against the charges that fall in its window.
+ * - end   = cutoff date in `period`
+ * - start = previous cycle's cutoff + 1 day (i.e. EXCLUSIVE prev cutoff)
+ * The returned dates have time set to 00:00 local.
+ */
+export function cycleWindowForPeriod(cfg: CardConfig, period: string): { start: Date; end: Date } | null {
+  const m = period.match(/^(\d{4})-(\d{2})$/)
+  if (!m) return null
+  const year = parseInt(m[1], 10)
+  const monthIdx = parseInt(m[2], 10) - 1
+  const end = buildDate(year, monthIdx, cfg.cutoffDay)
+  // Previous cutoff was one month earlier (same day, clamped)
+  const prev = buildDate(year, monthIdx - 1, cfg.cutoffDay)
+  const start = new Date(prev.getTime() + 86_400_000)  // day after previous cutoff
+  start.setHours(0, 0, 0, 0)
+  return { start, end }
+}
+
 export function fmtDueLabel(daysUntilDue: number): string {
   if (daysUntilDue === 0)  return "due today"
   if (daysUntilDue === 1)  return "due tomorrow"

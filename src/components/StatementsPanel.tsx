@@ -3,10 +3,13 @@ import { useState } from "react"
 import { C, CC_CARDS, fmt, fmtDate } from "@/lib/utils"
 import { Card, Label, inp, lbl, ToggleRow } from "./ui"
 import { Icon } from "./Icon"
-import type { Statement } from "@/types"
+import { cycleWindowForPeriod, type CardConfig } from "@/lib/cardCycles"
+import type { Statement, CCCharge } from "@/types"
 
 interface Props {
   statements: Statement[]
+  ccExpanded: CCCharge[]
+  cardConfig: Record<string, CardConfig>
   reload: () => Promise<void>
 }
 
@@ -26,7 +29,7 @@ function thisPeriod() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
 }
 
-export function StatementsPanel({ statements, reload }: Props) {
+export function StatementsPanel({ statements, ccExpanded, cardConfig, reload }: Props) {
   const [adding, setAdding] = useState(false)
   const [form, setForm] = useState({
     card: "OpenBank" as (typeof CC_CARDS)[number],
@@ -154,6 +157,19 @@ export function StatementsPanel({ statements, reload }: Props) {
         const fullyPaid = remaining === 0
         const pct = s.closingBalance > 0 ? Math.min(100, Math.round((s.paid / s.closingBalance) * 100)) : 0
         const accent = fullyPaid ? C.green : remaining > s.closingBalance * 0.5 ? C.amber : C.amber
+        // Reconcile logged charges against bank's closing balance, if cycle config exists
+        let reconcile: { logged: number; bank: number; diff: number; count: number } | null = null
+        const cfg = cardConfig[s.card]
+        if (cfg && s.closingBalance > 0) {
+          const w = cycleWindowForPeriod(cfg, s.period)
+          if (w) {
+            const matched = ccExpanded
+              .filter(c => c.card === s.card)
+              .filter(c => { const d = new Date(c.date + "T00:00:00"); return d >= w.start && d <= w.end })
+            const logged = matched.reduce((sum, c) => sum + c.amount, 0)
+            reconcile = { logged, bank: s.closingBalance, diff: logged - s.closingBalance, count: matched.length }
+          }
+        }
         return (
           <div key={s.id} style={{ padding: "12px 0", borderBottom: `1px solid ${C.border}` }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
@@ -191,6 +207,39 @@ export function StatementsPanel({ statements, reload }: Props) {
             <div style={{ background: C.border, borderRadius: 20, height: 4, overflow: "hidden", marginTop: 8 }}>
               <div style={{ width: pct + "%", height: "100%", borderRadius: 20, background: fullyPaid ? C.green : accent, transition: "width .4s" }} />
             </div>
+
+            {/* Reconciliation: logged vs bank */}
+            {reconcile && (() => {
+              const diffAbs = Math.abs(reconcile.diff)
+              const pctOff = reconcile.bank > 0 ? (diffAbs / reconcile.bank) * 100 : 0
+              const tight = pctOff < 1
+              const loose = pctOff < 10
+              const color = tight ? C.green : loose ? C.amber : C.red
+              const sign = reconcile.diff > 0 ? "+" : reconcile.diff < 0 ? "−" : ""
+              const verdict = tight ? "matches"
+                : reconcile.diff > 0 ? "you logged more than the bank"
+                : "you may be missing entries"
+              return (
+                <div style={{
+                  marginTop: 8, padding: "8px 10px", borderRadius: 8,
+                  background: color + "14", border: `1px solid ${color}33`,
+                  fontSize: 10.5, color: C.muted, lineHeight: 1.5,
+                }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 6 }}>
+                    <span>Logged ({reconcile.count} charges)</span>
+                    <span style={{ color: C.text, fontVariantNumeric: "tabular-nums" }}>{fmt(reconcile.logged)}</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 6 }}>
+                    <span>Bank closing</span>
+                    <span style={{ color: C.text, fontVariantNumeric: "tabular-nums" }}>{fmt(reconcile.bank)}</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 6, marginTop: 2 }}>
+                    <span style={{ color, fontWeight: 700 }}>Δ {sign}{fmt(diffAbs)} ({pctOff.toFixed(1)}%)</span>
+                    <span style={{ color }}>{verdict}</span>
+                  </div>
+                </div>
+              )
+            })()}
 
             {!fullyPaid && payingId !== s.id && (
               <button onClick={() => { setPayingId(s.id); setPayForm({ amount: String(remaining), paidOn: todayStr(), note: "" }) }}

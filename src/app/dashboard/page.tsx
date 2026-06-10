@@ -907,7 +907,7 @@ export default function Dashboard() {
               )
             })()}
 
-            <StatementsPanel statements={state.statements ?? []} reload={load} />
+            <StatementsPanel statements={state.statements ?? []} ccExpanded={ccExpanded} cardConfig={cardConfig} reload={load} />
 
             {showForm && ccForm()}
 
