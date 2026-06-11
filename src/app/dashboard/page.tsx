@@ -22,7 +22,7 @@ import { QuickLogSheet } from "@/components/QuickLogSheet"
 import { EditEntrySheet } from "@/components/EditEntrySheet"
 import { TopBar } from "@/components/TopBar"
 import { BottomNav, type NavTab } from "@/components/BottomNav"
-import { HomeScreen } from "@/components/HomeScreen"
+import { HomeScreen, type HomeNavTarget } from "@/components/HomeScreen"
 import { CardTile } from "@/components/CardTile"
 import type { Expense, Income, CCCharge, Recurring, FutureObligation } from "@/types"
 
@@ -60,6 +60,19 @@ export default function Dashboard() {
   const [cardConfig, setCardConfig] = useState<Record<string, CardConfig>>({})
   const [recurring, setRecurring] = useState<Recurring[]>([])
   const [obligations, setObligations] = useState<FutureObligation[]>([])
+  // Category filter applied to the Expenses tab (set from Home drill-downs)
+  const [catFilter, setCatFilter] = useState<string | null>(null)
+  const handleHomeNav = (target: HomeNavTarget) => {
+    if (typeof target === "string") {
+      setCatFilter(null)
+      if (target === "expenses") setTab("Expenses")
+      else if (target === "income") setTab("Income")
+      else if (target === "cards") setTab("Cards")
+      else if (target === "invest") setTab("Investments")
+    } else if (target.kind === "category") {
+      setCatFilter(target.cat); setTab("Expenses")
+    }
+  }
   const [priceBusy, setPriceBusy] = useState(false)
   const [quickOpen, setQuickOpen] = useState(false)
   const [editing, setEditing] = useState<
@@ -504,6 +517,7 @@ export default function Dashboard() {
         {tab === "Overview" && (
           <HomeScreen
             moName={moName}
+            onNavigate={handleHomeNav}
             currentCash={currentCash}
             totalIncMXN={totalIncMXN} totalIncUSD={totalIncUSD}
             totalExpMXN={totalExpMXN}
@@ -773,12 +787,27 @@ export default function Dashboard() {
               <span style={{ fontSize: 19, fontWeight: 700, color: C.red, letterSpacing: "-0.4px" }}>{fmt(totalExpMXN)} MXN</span>
             </div>
             <SearchBar value={search.exp} onChange={v => setSearch(s => ({ ...s, exp: v }))} placeholder="Search expenses…" />
+            {catFilter && (
+              <button onClick={() => setCatFilter(null)} style={{
+                display: "inline-flex", alignItems: "center", gap: 6, marginBottom: 10,
+                padding: "6px 12px", fontSize: 11.5, fontFamily: "inherit", fontWeight: 700,
+                border: "none", borderRadius: 100, cursor: "pointer",
+                background: (CAT_COLORS[catFilter] ?? C.muted) + "22",
+                color: CAT_COLORS[catFilter] ?? C.muted,
+              }}>
+                <span style={{ width: 7, height: 7, borderRadius: "50%", background: CAT_COLORS[catFilter] ?? C.muted }} />
+                {catFilter}
+                <Icon name="close" size={11} color={CAT_COLORS[catFilter] ?? C.muted} />
+              </button>
+            )}
             {(() => {
               const q = search.exp.toLowerCase()
               const filtered = monthExp.filter(e =>
-                e.name.toLowerCase().includes(q) ||
-                e.cat.toLowerCase().includes(q) ||
-                (e.note ?? "").toLowerCase().includes(q)
+                (!catFilter || e.cat === catFilter) && (
+                  e.name.toLowerCase().includes(q) ||
+                  e.cat.toLowerCase().includes(q) ||
+                  (e.note ?? "").toLowerCase().includes(q)
+                )
               )
               const ft = filtered.reduce((s, e) => s + e.amount, 0)
               return filtered.length === 0 ? (

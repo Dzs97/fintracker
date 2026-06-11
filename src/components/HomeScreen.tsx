@@ -10,8 +10,16 @@ export interface HomeSeries {
   v: number
 }
 
+export type HomeNavTarget =
+  | "expenses"
+  | "income"
+  | "cards"
+  | "invest"
+  | { kind: "category"; cat: string }
+
 export interface HomeProps {
   moName: string
+  onNavigate: (target: HomeNavTarget) => void
   // hero
   currentCash: number
   totalIncMXN: number
@@ -77,7 +85,7 @@ function AmountDisplay({ value, color, size = 48, suffix }: { value: number; col
 
 export function HomeScreen(props: HomeProps) {
   const {
-    moName, currentCash, totalIncMXN, totalIncUSD, totalExpMXN,
+    moName, onNavigate, currentCash, totalIncMXN, totalIncUSD, totalExpMXN,
     monthInvMXN, monthCCTotal, monthExpCount, monthCCCount, monthInvCount,
     ccPoolTotal, ccWarning, cashDelta, fxRate,
     catTotals, catGrand, catPrev,
@@ -126,57 +134,84 @@ export function HomeScreen(props: HomeProps) {
             Income − expenses − investments
           </div>
 
-          <div style={{ marginTop: 18, paddingTop: 16, borderTop: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+          <button
+            onClick={() => onNavigate("cards")}
+            style={{
+              marginTop: 18, paddingTop: 16, borderTop: `1px solid ${C.border}`,
+              display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8,
+              width: "100%", background: "transparent", border: "none", cursor: "pointer",
+              textAlign: "left", color: "inherit",
+              WebkitTapHighlightColor: "transparent",
+            }}
+          >
             <div>
               <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 600 }}>CC pool unpaid</div>
               <div style={{ fontSize: 16, fontWeight: 700, color: ccWarning ? C.amber : C.text, letterSpacing: "-0.3px", marginTop: 2, fontVariantNumeric: "tabular-nums" }}>
                 {fmt(ccPoolTotal)} <span style={{ fontSize: 10, color: C.muted, fontWeight: 500 }}>MXN</span>
               </div>
             </div>
-            <div style={{ textAlign: "right" }}>
-              <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 600 }}>FX</div>
-              <div style={{ fontSize: 12.5, color: C.text, marginTop: 2, fontVariantNumeric: "tabular-nums" }}>
-                ${fxRate.toFixed(2)} <span style={{ fontSize: 9, color: C.dim }}>· live</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 600 }}>FX</div>
+                <div style={{ fontSize: 12.5, color: C.text, marginTop: 2, fontVariantNumeric: "tabular-nums" }}>
+                  ${fxRate.toFixed(2)} <span style={{ fontSize: 9, color: C.dim }}>· live</span>
+                </div>
               </div>
+              <Icon name="chevR" size={14} color={C.dim} />
             </div>
-          </div>
+          </button>
         </div>
       </div>
 
       {/* ── CC warning banner ─────────────────────────────────── */}
       {ccWarning && (
-        <div style={{
-          background: `linear-gradient(135deg, ${C.amberDim} 0%, ${C.amber}1A 100%)`,
-          border: `1px solid ${C.amber}55`, borderRadius: 16,
-          padding: "14px 16px", marginBottom: 16,
-          display: "flex", alignItems: "center", gap: 12,
-        }}>
+        <button
+          onClick={() => onNavigate("cards")}
+          style={{
+            width: "100%", textAlign: "left", cursor: "pointer",
+            background: `linear-gradient(135deg, ${C.amberDim} 0%, ${C.amber}1A 100%)`,
+            border: `1px solid ${C.amber}55`, borderRadius: 16,
+            padding: "14px 16px", marginBottom: 16,
+            display: "flex", alignItems: "center", gap: 12,
+            WebkitTapHighlightColor: "transparent",
+          }}
+        >
           <div style={{
             width: 36, height: 36, borderRadius: 10, background: C.amber + "33",
             display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
           }}>
             <Icon name="warning" size={18} color={C.amber} />
           </div>
-          <div>
+          <div style={{ flex: 1 }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: C.amber }}>Card pool is high</div>
             <div style={{ fontSize: 11.5, color: C.muted, marginTop: 2 }}>Unpaid cards exceed 80% of cash</div>
           </div>
-        </div>
+          <Icon name="chevR" size={16} color={C.amber} />
+        </button>
       )}
 
-      {/* ── Stat tiles 2×2 ────────────────────────────────────── */}
+      {/* ── Stat tiles 2×2 (tappable drill-downs) ─────────────── */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
-        <StatTile label="Income"   value={totalIncMXN}  sub={`${fmt(totalIncUSD)} USD`} color={C.green} icon="income" gradient={G.income} />
-        <StatTile label="Spent"    value={totalExpMXN}  sub={`${monthExpCount} entries`} color={C.red} icon="expenses" gradient={G.spent} />
-        <StatTile label="Cards"    value={monthCCTotal} sub={`${monthCCCount} charges`} color={C.amber} icon="cards" gradient={G.cards} />
-        <StatTile label="Invested" value={monthInvMXN}  sub={`${monthInvCount} buys`} color={C.blue} icon="invest" gradient={G.invest} />
+        <StatTile label="Income"   value={totalIncMXN}  sub={`${fmt(totalIncUSD)} USD`} color={C.green} icon="income" gradient={G.income}   onClick={() => onNavigate("income")} />
+        <StatTile label="Spent"    value={totalExpMXN}  sub={`${monthExpCount} entries`} color={C.red}  icon="expenses" gradient={G.spent}  onClick={() => onNavigate("expenses")} />
+        <StatTile label="Cards"    value={monthCCTotal} sub={`${monthCCCount} charges`} color={C.amber} icon="cards"   gradient={G.cards}  onClick={() => onNavigate("cards")} />
+        <StatTile label="Invested" value={monthInvMXN}  sub={`${monthInvCount} buys`}    color={C.blue}  icon="invest"  gradient={G.invest} onClick={() => onNavigate("invest")} />
       </div>
 
-      {/* ── Net worth card ────────────────────────────────────── */}
-      <Card style={{ padding: 18, marginBottom: 16, background: G.card }}>
+      {/* ── Net worth card (tappable → Invest) ────────────────── */}
+      <button
+        onClick={() => onNavigate("invest")}
+        style={{
+          width: "100%", textAlign: "left", cursor: "pointer",
+          padding: 18, marginBottom: 16,
+          background: G.card, border: `1px solid ${C.border}`, borderRadius: 16,
+          fontFamily: "inherit", color: "inherit",
+          WebkitTapHighlightColor: "transparent",
+        }}
+      >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 4 }}>
           <Label style={{ marginBottom: 0 }}>Net worth</Label>
-          <div style={{ fontSize: 9.5, color: C.dim }}>6 mo</div>
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 9.5, color: C.dim }}>6 mo<Icon name="chevR" size={11} color={C.dim} /></div>
         </div>
         <AmountDisplay value={netWorth} color={netWorth >= 0 ? C.green : C.red} size={28} suffix="MXN" />
         <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>
@@ -191,7 +226,7 @@ export function HomeScreen(props: HomeProps) {
             {netWorthLine.map(p => <span key={p.label} style={{ fontSize: 9, color: C.dim }}>{p.label}</span>)}
           </div>
         </div>
-      </Card>
+      </button>
 
       {/* ── Spending breakdown ────────────────────────────────── */}
       {Object.keys(catTotals).length > 0 && (
@@ -206,7 +241,15 @@ export function HomeScreen(props: HomeProps) {
                 const delta = prev === 0 ? null : ((amt - prev) / prev) * 100
                 const dColor = delta === null ? C.dim : delta >= 0 ? C.red : C.green
                 return (
-                  <div key={cat}>
+                  <button
+                    key={cat}
+                    onClick={() => onNavigate({ kind: "category", cat })}
+                    style={{
+                      background: "transparent", border: "none", padding: 0,
+                      cursor: "pointer", textAlign: "left", fontFamily: "inherit",
+                      WebkitTapHighlightColor: "transparent",
+                    }}
+                  >
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
                       <span style={{ fontSize: 11.5, color: C.text, display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
                         <span style={{ width: 8, height: 8, borderRadius: "50%", background: CAT_COLORS[cat] ?? C.muted, flexShrink: 0 }} />
@@ -224,7 +267,7 @@ export function HomeScreen(props: HomeProps) {
                     <div style={{ background: C.border, borderRadius: 20, height: 4, overflow: "hidden" }}>
                       <div style={{ width: pct + "%", height: "100%", borderRadius: 20, background: CAT_COLORS[cat] ?? C.muted, transition: "width .6s cubic-bezier(0.4,0,0.2,1)" }} />
                     </div>
-                  </div>
+                  </button>
                 )
               })}
             </div>
@@ -241,7 +284,16 @@ export function HomeScreen(props: HomeProps) {
               const series = catSeries[cat] ?? Array(6).fill(0)
               const max = Math.max(...series, 1)
               return (
-                <div key={cat} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <button
+                  key={cat}
+                  onClick={() => onNavigate({ kind: "category", cat })}
+                  style={{
+                    background: "transparent", border: "none", padding: 0,
+                    cursor: "pointer", display: "flex", alignItems: "center", gap: 10,
+                    fontFamily: "inherit", color: "inherit", textAlign: "left",
+                    WebkitTapHighlightColor: "transparent",
+                  }}
+                >
                   <span style={{ fontSize: 12, color: C.text, display: "inline-flex", alignItems: "center", gap: 6, flexShrink: 0, width: 110 }}>
                     <span style={{ width: 8, height: 8, borderRadius: "50%", background: CAT_COLORS[cat] ?? C.muted }} />
                     <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cat}</span>
@@ -255,7 +307,7 @@ export function HomeScreen(props: HomeProps) {
                     })}
                   </svg>
                   <span style={{ fontSize: 11, color: C.muted, flexShrink: 0, fontVariantNumeric: "tabular-nums", width: 64, textAlign: "right" }}>{fmt(series[series.length - 1])}</span>
-                </div>
+                </button>
               )
             })}
           </div>
@@ -268,13 +320,24 @@ export function HomeScreen(props: HomeProps) {
   )
 }
 
-function StatTile({ label, value, sub, color, icon, gradient }: { label: string; value: number; sub: string; color: string; icon: string; gradient: string }) {
+function StatTile({ label, value, sub, color, icon, gradient, onClick }: { label: string; value: number; sub: string; color: string; icon: string; gradient: string; onClick?: () => void }) {
   const v = useTween(value)
+  const [pressed, setPressed] = useState(false)
   return (
-    <div style={{
-      background: C.card, border: `1px solid ${C.border}`,
-      borderRadius: 18, padding: "14px 14px 16px", position: "relative", overflow: "hidden",
-    }}>
+    <button
+      onClick={onClick}
+      onPointerDown={() => setPressed(true)}
+      onPointerUp={() => setPressed(false)}
+      onPointerLeave={() => setPressed(false)}
+      style={{
+        background: C.card, border: `1px solid ${C.border}`,
+        borderRadius: 18, padding: "14px 14px 16px", position: "relative", overflow: "hidden",
+        cursor: onClick ? "pointer" : "default", textAlign: "left",
+        transform: pressed ? "scale(0.97)" : "scale(1)",
+        transition: "transform 150ms cubic-bezier(0.4,0,0.2,1)",
+        WebkitTapHighlightColor: "transparent",
+        fontFamily: "inherit", color: "inherit",
+      }}>
       {/* Subtle gradient accent corner */}
       <div style={{
         position: "absolute", top: -28, right: -28, width: 80, height: 80, borderRadius: "50%",
@@ -288,7 +351,7 @@ function StatTile({ label, value, sub, color, icon, gradient }: { label: string;
       </div>
       <div style={{ fontSize: 19, fontWeight: 800, color, letterSpacing: "-0.5px", fontVariantNumeric: "tabular-nums", position: "relative" }}>{fmt(v)}</div>
       <div style={{ fontSize: 10.5, color: C.dim, marginTop: 3, position: "relative" }}>{sub}</div>
-    </div>
+    </button>
   )
 }
 
