@@ -12,7 +12,7 @@ import {
 import { Icon } from "@/components/Icon"
 import {
   Card, Tag, BucketTag, Label, Empty, SearchBar, ToggleRow,
-  EntryRow, FormSheet, FAB, MonthNav, inp, lbl,
+  EntryRow, FormSheet, FAB, inp, lbl,
 } from "@/components/ui"
 import { SparkBar, LineChart, Donut } from "@/components/charts"
 import { MapsEditor } from "@/components/MapsEditor"
@@ -23,6 +23,7 @@ import { EditEntrySheet } from "@/components/EditEntrySheet"
 import { TopBar } from "@/components/TopBar"
 import { BottomNav, type NavTab } from "@/components/BottomNav"
 import { HomeScreen } from "@/components/HomeScreen"
+import { CardTile } from "@/components/CardTile"
 import type { Expense, Income, CCCharge, Recurring, FutureObligation } from "@/types"
 
 const TABS = [
@@ -529,93 +530,64 @@ export default function Dashboard() {
         {tab === "Cards" && (
           <div style={PAD}>
 
-            <Card glow={C.amber} style={{ padding: 20, marginBottom: 14 }}>
-              <div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8, fontWeight: 600 }}>Total unpaid pool</div>
-              <div style={{ fontSize: 36, fontWeight: 700, color: C.amber, letterSpacing: "-1.2px", lineHeight: 1 }}>
-                {fmt(ccPoolTotal)}<span style={{ fontSize: 16, fontWeight: 500, color: C.muted, marginLeft: 7 }}>MXN</span>
+            {/* ── Total unpaid pool · refined hero ─────────────────────── */}
+            <div style={{
+              position: "relative", overflow: "hidden",
+              background: C.elevated, border: `1px solid ${C.border}`,
+              borderRadius: 22, padding: "22px 22px 20px", marginBottom: 16,
+            }}>
+              <div style={{
+                position: "absolute", top: -80, right: -50, width: 220, height: 220,
+                borderRadius: "50%",
+                background: `radial-gradient(circle, ${C.amber}33, transparent 70%)`,
+                pointerEvents: "none",
+              }} />
+              <div style={{ position: "relative" }}>
+                <div style={{ fontSize: 10.5, color: C.muted, textTransform: "uppercase", letterSpacing: "0.14em", fontWeight: 700, marginBottom: 8 }}>
+                  Total unpaid pool
+                </div>
+                <div style={{ fontSize: 40, fontWeight: 800, color: C.amber, letterSpacing: "-1.5px", lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>
+                  {fmt(ccPoolTotal)}<span style={{ fontSize: 14, fontWeight: 500, color: C.muted, marginLeft: 8 }}>MXN</span>
+                </div>
+                <div style={{ fontSize: 11, color: C.dim, marginTop: 8 }}>
+                  across {CC_CARDS.filter(c => (ccPoolByCard[c] ?? 0) > 0).length} card{CC_CARDS.filter(c => (ccPoolByCard[c] ?? 0) > 0).length !== 1 ? "s" : ""}
+                </div>
               </div>
-            </Card>
+            </div>
 
-            {/* Per-card statement + due-date breakdown */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 14 }}>
+            {/* ── Stack of credit-card-styled tiles, one per card ──────── */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 16 }}>
               {CC_CARDS.map(card => {
                 const pool = ccPoolByCard[card] ?? 0
                 const cfg = cardConfig[card]
                 const cardCharges = ccExpanded.filter(c => c.card === card)
                 const settledForCard = state.settled[card] ?? 0
-                if (!cfg) {
-                  return (
-                    <Card key={card} style={{ padding: 14 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: C.amber, letterSpacing: "0.04em", textTransform: "uppercase" }}>{card}</div>
-                        <div style={{ fontSize: 17, fontWeight: 700, color: pool > 0 ? C.amber : C.muted, letterSpacing: "-0.3px" }}>{fmt(pool)} MXN</div>
-                      </div>
-                      <div style={{ fontSize: 11, color: C.dim }}>
-                        Set cutoff + due day in <span style={{ color: C.muted }}>Invest → Maps</span> to see statement + due date.
-                      </div>
-                      {pool > 0 && (
-                        <button onClick={() => settleCard(card)} style={{
-                          marginTop: 10, padding: "8px 14px", fontSize: 12, fontFamily: "inherit", fontWeight: 700,
-                          border: "none", borderRadius: 10, cursor: "pointer", background: C.green + "26", color: C.green,
-                          display: "inline-flex", alignItems: "center", gap: 6,
-                        }}>
-                          <Icon name="check" size={13} color={C.green} />Settle full balance
-                        </button>
-                      )}
-                    </Card>
-                  )
+                let currentCycleTotal = 0
+                let statementBalance = pool
+                if (cfg) {
+                  const cycle = computeCycle(cfg)
+                  const parts = partitionByCycle(cardCharges, cycle)
+                  currentCycleTotal = parts.current.reduce((s, c) => s + c.amount, 0)
+                  const billed = parts.statement.reduce((s, c) => s + c.amount, 0) + parts.carryover.reduce((s, c) => s + c.amount, 0)
+                  statementBalance = Math.max(0, billed - settledForCard)
                 }
-                const cycle = computeCycle(cfg)
-                const parts = partitionByCycle(cardCharges, cycle)
-                const statementGross = parts.statement.reduce((s, c) => s + c.amount, 0)
-                const carryGross     = parts.carryover.reduce((s, c) => s + c.amount, 0)
-                const currentGross   = parts.current.reduce((s, c) => s + c.amount, 0)
-                // statement_balance = (everything billed before current cycle) − (what's been settled)
-                const billed = statementGross + carryGross
-                const statementBalance = Math.max(0, billed - settledForCard)
-                const urgent = cycle.daysUntilDue <= 3 && statementBalance > 0
-                const overdue = cycle.overdue && statementBalance > 0
-                const dueColor = overdue ? C.red : urgent ? C.amber : C.text
-                const dueLabel = fmtDueLabel(cycle.daysUntilDue)
+                // Match this card to its current-period statement (if any)
+                const periodNow = cfg
+                  ? `${computeCycle(cfg).lastCutoff.getFullYear()}-${String(computeCycle(cfg).lastCutoff.getMonth() + 1).padStart(2, "0")}`
+                  : undefined
+                const stmt = state.statements?.find(s => s.card === card && s.period === periodNow)
                 return (
-                  <Card key={card} style={{ padding: 14, borderColor: overdue ? C.red + "55" : urgent ? C.amber + "55" : C.border }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
-                      <div>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: C.amber, letterSpacing: "0.04em", textTransform: "uppercase" }}>{card}</div>
-                        <div style={{ fontSize: 10.5, color: dueColor, marginTop: 3 }}>
-                          Due {cycle.statementDue.toLocaleDateString("en-US", { month: "short", day: "numeric" })} · <span style={{ fontWeight: 700 }}>{dueLabel}</span>
-                        </div>
-                      </div>
-                      <div style={{ textAlign: "right" }}>
-                        <div style={{ fontSize: 19, fontWeight: 700, color: dueColor, letterSpacing: "-0.4px" }}>{fmt(statementBalance)}</div>
-                        <div style={{ fontSize: 10, color: C.dim, marginTop: 2 }}>statement balance</div>
-                      </div>
-                    </div>
-                    <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-                      <div style={{ flex: 1, background: C.bg, borderRadius: 10, padding: "8px 10px" }}>
-                        <div style={{ fontSize: 9, color: C.muted, letterSpacing: "0.04em" }}>CURRENT CYCLE</div>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginTop: 2 }}>{fmt(currentGross)}</div>
-                        <div style={{ fontSize: 9.5, color: C.dim, marginTop: 2 }}>cuts {cycle.nextCutoff.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</div>
-                      </div>
-                      <div style={{ flex: 1, background: C.bg, borderRadius: 10, padding: "8px 10px" }}>
-                        <div style={{ fontSize: 9, color: C.muted, letterSpacing: "0.04em" }}>UNPAID TOTAL</div>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginTop: 2 }}>{fmt(pool)}</div>
-                        <div style={{ fontSize: 9.5, color: C.dim, marginTop: 2 }}>statement + current</div>
-                      </div>
-                    </div>
-                    {pool > 0 && (
-                      <button onClick={() => settleCard(card)} style={{
-                        width: "100%", padding: "10px 14px", fontSize: 12, fontFamily: "inherit", fontWeight: 700,
-                        border: "none", borderRadius: 10, cursor: "pointer",
-                        background: urgent || overdue ? C.green : C.green + "26",
-                        color: urgent || overdue ? "#0E0F12" : C.green,
-                        display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
-                      }}>
-                        <Icon name="check" size={13} color={urgent || overdue ? "#0E0F12" : C.green} />
-                        Settle {fmt(pool)} MXN
-                      </button>
-                    )}
-                  </Card>
+                  <CardTile
+                    key={card}
+                    card={card}
+                    cfg={cfg}
+                    pool={pool}
+                    currentCycleTotal={currentCycleTotal}
+                    statementBalance={statementBalance}
+                    statement={stmt}
+                    onSettle={() => settleCard(card)}
+                    onPaymentRecorded={load}
+                  />
                 )
               })}
             </div>
@@ -643,47 +615,63 @@ export default function Dashboard() {
                 return d.toLocaleString("en-US", { month: "short" })
               })
               return (
-                <Card style={{ padding: 16, marginBottom: 14, borderColor: C.amber + "33" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 10 }}>
-                    <Label style={{ marginBottom: 0 }}>Locked-in MSI · next {HORIZON} mo</Label>
-                    <div style={{ textAlign: "right" }}>
-                      <div style={{ fontSize: 18, fontWeight: 700, color: C.amber, letterSpacing: "-0.4px" }}>
-                        {fmt(totalLocked)} <span style={{ fontSize: 10, color: C.muted, fontWeight: 500 }}>MXN</span>
+                <div style={{
+                  background: C.card, border: `1px solid ${C.border}`,
+                  borderRadius: 22, padding: "18px 18px 16px", marginBottom: 16,
+                  position: "relative", overflow: "hidden",
+                }}>
+                  <div style={{
+                    position: "absolute", top: -50, right: -40, width: 160, height: 160, borderRadius: "50%",
+                    background: `radial-gradient(circle, ${C.amber}26, transparent 70%)`, pointerEvents: "none",
+                  }} />
+                  <div style={{ position: "relative" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 12 }}>
+                      <div>
+                        <div style={{ fontSize: 10.5, color: C.muted, textTransform: "uppercase", letterSpacing: "0.14em", fontWeight: 700 }}>Locked-in MSI</div>
+                        <div style={{ fontSize: 11, color: C.dim, marginTop: 4 }}>next {HORIZON} months</div>
                       </div>
-                      <div style={{ fontSize: 10, color: C.dim, marginTop: 2 }}>
-                        next month {fmt(totalByMonth[0])} across {Object.keys(byCard).length} cards
+                      <div style={{ textAlign: "right" }}>
+                        <div style={{ fontSize: 22, fontWeight: 800, color: C.amber, letterSpacing: "-0.6px", fontVariantNumeric: "tabular-nums" }}>
+                          {fmt(totalLocked)}<span style={{ fontSize: 11, color: C.muted, fontWeight: 500, marginLeft: 4 }}>MXN</span>
+                        </div>
+                        <div style={{ fontSize: 10.5, color: C.dim, marginTop: 3 }}>
+                          next mo <span style={{ color: C.text, fontVariantNumeric: "tabular-nums" }}>{fmt(totalByMonth[0])}</span>
+                        </div>
                       </div>
                     </div>
+                    <svg viewBox="0 0 360 70" style={{ width: "100%", height: 70, display: "block", marginTop: 4 }}>
+                      <defs>
+                        <linearGradient id="msiGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor={C.amber} stopOpacity="1" />
+                          <stop offset="100%" stopColor={C.amber} stopOpacity="0.5" />
+                        </linearGradient>
+                      </defs>
+                      {totalByMonth.map((v, i) => {
+                        const bw = 24, gap = 6
+                        const x = i * (bw + gap)
+                        const h = (v / maxBar) * 60
+                        return (
+                          <g key={i}>
+                            <rect x={x} y={64 - h} width={bw} height={h} rx={4} fill="url(#msiGrad)" opacity={i === 0 ? 1 : 0.75} />
+                            <text x={x + bw / 2} y={70} textAnchor="middle" fontSize={8.5} fill={i === 0 ? C.amber : C.dim} fontWeight={i === 0 ? 700 : 400}>{months[i]}</text>
+                            <title>{months[i]}: {fmt(v)}</title>
+                          </g>
+                        )
+                      })}
+                    </svg>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 14 }}>
+                      {Object.entries(nextMonthByCard).map(([card, amt]) => (
+                        <div key={card} style={{
+                          padding: "6px 11px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 100,
+                          fontSize: 11, color: C.text, display: "inline-flex", alignItems: "center", gap: 6,
+                        }}>
+                          <span style={{ fontSize: 9.5, color: C.amber, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase" }}>{card}</span>
+                          <span style={{ fontVariantNumeric: "tabular-nums", fontWeight: 700 }}>{fmt(amt)}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <svg viewBox="0 0 360 70" style={{ width: "100%", height: 70, display: "block" }}>
-                    {totalByMonth.map((v, i) => {
-                      const bw = 24, gap = 6
-                      const x = i * (bw + gap)
-                      const h = (v / maxBar) * 60
-                      return (
-                        <g key={i}>
-                          <rect x={x} y={64 - h} width={bw} height={h} rx={3} fill={C.amber} opacity={0.85} />
-                          <text x={x + bw / 2} y={70} textAnchor="middle" fontSize={8} fill={C.dim}>{months[i]}</text>
-                          <title>{months[i]}: {fmt(v)}</title>
-                        </g>
-                      )
-                    })}
-                  </svg>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
-                    {Object.entries(nextMonthByCard).map(([card, amt]) => (
-                      <div key={card} style={{
-                        padding: "6px 11px", background: C.amberDim, border: `1px solid ${C.amber}28`, borderRadius: 100,
-                        fontSize: 11, color: C.text, display: "inline-flex", alignItems: "center", gap: 6,
-                      }}>
-                        <span style={{ fontSize: 10, color: C.amber, fontWeight: 700 }}>{card}</span>
-                        <span style={{ fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>{fmt(amt)}</span>
-                      </div>
-                    ))}
-                  </div>
-                  <div style={{ fontSize: 10, color: C.dim, marginTop: 8 }}>
-                    Manage obligations in Invest → Maps → Future MSI obligations.
-                  </div>
-                </Card>
+                </div>
               )
             })()}
 
@@ -872,21 +860,48 @@ export default function Dashboard() {
         {/* ══ INVESTMENTS ══ */}
         {tab === "Investments" && (
           <div style={PAD}>
-            <Card glow={C.blue} style={{ padding: 20, marginBottom: 14 }}>
-              <div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8, fontWeight: 600 }}>Total invested · all time</div>
-              <div style={{ fontSize: 36, fontWeight: 700, color: C.blue, letterSpacing: "-1.2px", lineHeight: 1 }}>
-                {fmt(totalInvAllTime)}<span style={{ fontSize: 16, fontWeight: 500, color: C.muted, marginLeft: 7 }}>MXN</span>
+            {/* ── Invest hero · refined ─────────────────────────────── */}
+            <div style={{
+              position: "relative", overflow: "hidden",
+              background: C.elevated, border: `1px solid ${C.border}`,
+              borderRadius: 22, padding: "22px 22px 18px", marginBottom: 14,
+            }}>
+              <div style={{
+                position: "absolute", top: -80, right: -50, width: 240, height: 240, borderRadius: "50%",
+                background: `radial-gradient(circle, ${C.blue}33, transparent 70%)`, pointerEvents: "none",
+              }} />
+              <div style={{ position: "relative" }}>
+                <div style={{ fontSize: 10.5, color: C.muted, textTransform: "uppercase", letterSpacing: "0.14em", fontWeight: 700, marginBottom: 8 }}>
+                  Total invested
+                </div>
+                <div style={{ fontSize: 40, fontWeight: 800, color: C.blue, letterSpacing: "-1.5px", lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>
+                  {fmt(totalInvAllTime)}<span style={{ fontSize: 14, fontWeight: 500, color: C.muted, marginLeft: 8 }}>MXN</span>
+                </div>
+                <div style={{ fontSize: 11, color: C.dim, marginTop: 8 }}>all-time cost basis</div>
+
+                {/* Bucket grid */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 18 }}>
+                  {BUCKETS.map(b => (
+                    <div key={b.id} style={{
+                      background: C.card, border: `1px solid ${b.color}33`, borderRadius: 14,
+                      padding: "12px 14px", position: "relative", overflow: "hidden",
+                    }}>
+                      <div style={{
+                        position: "absolute", top: -20, right: -20, width: 60, height: 60, borderRadius: "50%",
+                        background: b.color, opacity: 0.10, pointerEvents: "none",
+                      }} />
+                      <div style={{ position: "relative" }}>
+                        <div style={{ fontSize: 10, color: b.color, textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 700 }}>{b.label}</div>
+                        <div style={{ fontSize: 17, fontWeight: 800, color: C.text, letterSpacing: "-0.4px", marginTop: 6, fontVariantNumeric: "tabular-nums" }}>
+                          {fmt(bucketTotals[b.id])}
+                        </div>
+                        <div style={{ fontSize: 9.5, color: C.dim, marginTop: 2 }}>MXN</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 16 }}>
-                {BUCKETS.map(b => (
-                  <div key={b.id} style={{ background: b.dim, borderRadius: 12, padding: "10px 12px", border: `1px solid ${b.color}28` }}>
-                    <div style={{ fontSize: 10, color: b.color, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 4, fontWeight: 600 }}>{b.label}</div>
-                    <div style={{ fontSize: 16, fontWeight: 700, color: C.text }}>{fmt(bucketTotals[b.id])}</div>
-                    <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>MXN</div>
-                  </div>
-                ))}
-              </div>
-            </Card>
+            </div>
 
             {/* Live fund prices */}
             {Object.keys(funds).length > 0 && (
