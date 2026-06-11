@@ -24,6 +24,7 @@ import { TopBar } from "@/components/TopBar"
 import { BottomNav, type NavTab } from "@/components/BottomNav"
 import { HomeScreen, type HomeNavTarget } from "@/components/HomeScreen"
 import { CardTile } from "@/components/CardTile"
+import { HomeSkeleton, Shimmer } from "@/components/Skeleton"
 import type { Expense, Income, CCCharge, Recurring, FutureObligation } from "@/types"
 
 const TABS = [
@@ -175,8 +176,20 @@ export default function Dashboard() {
 
   if (loading || !state) {
     return (
-      <div style={{ padding: "2rem", color: C.muted, background: C.bg, minHeight: "100vh", fontSize: 14 }}>
-        Loading…
+      <div style={{ background: C.bg, color: C.text, minHeight: "100vh" }}>
+        <div style={{ padding: "max(env(safe-area-inset-top, 16px), 16px) 16px 12px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+            <Shimmer width={38} height={38} radius={12} />
+            <div style={{ flex: 1 }}>
+              <Shimmer width={120} height={16} radius={6} />
+              <Shimmer width={80} height={11} radius={4} style={{ marginTop: 6 }} />
+            </div>
+            <Shimmer width={38} height={38} radius={12} />
+            <Shimmer width={38} height={38} radius={12} />
+          </div>
+          <Shimmer width={140} height={32} radius={100} />
+        </div>
+        <HomeSkeleton />
       </div>
     )
   }
@@ -934,46 +947,59 @@ export default function Dashboard() {
 
             {/* Live fund prices */}
             {Object.keys(funds).length > 0 && (
-              <Card style={{ padding: 16, marginBottom: 14 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <div style={{
+                position: "relative", overflow: "hidden",
+                background: C.card, border: `1px solid ${C.border}`,
+                borderRadius: 22, padding: "18px 18px 16px", marginBottom: 16,
+              }}>
+                <div style={{
+                  position: "absolute", top: -50, right: -40, width: 160, height: 160, borderRadius: "50%",
+                  background: `radial-gradient(circle, ${C.purple}22, transparent 70%)`, pointerEvents: "none",
+                }} />
+                <div style={{ position: "relative", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
                   <Label style={{ marginBottom: 0 }}>Live fund NAV</Label>
                   <button onClick={refreshPrices} disabled={priceBusy} style={{
-                    padding: "5px 10px", fontSize: 10.5, fontWeight: 700, border: "none", borderRadius: 8,
-                    cursor: "pointer", background: priceBusy ? C.cardHi : C.purple, color: "#0E0F12",
+                    padding: "6px 12px", fontSize: 10.5, fontWeight: 700, border: "none", borderRadius: 100,
+                    cursor: "pointer",
+                    background: priceBusy ? C.cardHi : C.purple,
+                    color: priceBusy ? C.muted : "#0B0D11",
                     fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 5,
+                    boxShadow: priceBusy ? "none" : `0 4px 14px ${C.purple}44`,
                   }}>
-                    <Icon name="refresh" size={12} color="#0E0F12" />
+                    <Icon name="refresh" size={12} color={priceBusy ? C.muted : "#0B0D11"} />
                     {priceBusy ? "Refreshing…" : "Refresh"}
                   </button>
                 </div>
-                {Object.entries(funds).map(([name, fund], i, arr) => {
-                  const p = state.prices?.[name]
-                  return (
-                    <div key={name} style={{
-                      display: "flex", justifyContent: "space-between", alignItems: "center",
-                      padding: "8px 0",
-                      borderBottom: i < arr.length - 1 ? `1px solid ${C.border}` : "none",
-                    }}>
-                      <div>
-                        <div style={{ fontSize: 13.5, fontWeight: 600 }}>{name}</div>
-                        {name !== fund && <div style={{ fontSize: 10.5, color: C.dim, marginTop: 2 }}>→ {fund}</div>}
+                <div style={{ position: "relative" }}>
+                  {Object.entries(funds).map(([name, fund], i, arr) => {
+                    const p = state.prices?.[name]
+                    return (
+                      <div key={name} style={{
+                        display: "flex", justifyContent: "space-between", alignItems: "center",
+                        padding: "10px 0",
+                        borderBottom: i < arr.length - 1 ? `1px solid ${C.border}` : "none",
+                      }}>
+                        <div>
+                          <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{name}</div>
+                          {name !== fund && <div style={{ fontSize: 10.5, color: C.dim, marginTop: 2 }}>→ {fund}</div>}
+                        </div>
+                        <div style={{ textAlign: "right" }}>
+                          {p ? (
+                            <>
+                              <div style={{ fontSize: 16, fontWeight: 800, color: C.purple, letterSpacing: "-0.3px", fontVariantNumeric: "tabular-nums" }}>
+                                {p.price.toFixed(4)} <span style={{ fontSize: 10, color: C.muted, fontWeight: 500 }}>{p.currency}</span>
+                              </div>
+                              <div style={{ fontSize: 10, color: C.dim, marginTop: 2 }}>as of {fmtDate(p.updatedAt.split("T")[0])}</div>
+                            </>
+                          ) : (
+                            <div style={{ fontSize: 11, color: C.muted }}>not fetched yet</div>
+                          )}
+                        </div>
                       </div>
-                      <div style={{ textAlign: "right" }}>
-                        {p ? (
-                          <>
-                            <div style={{ fontSize: 14.5, fontWeight: 700, color: C.purple, letterSpacing: "-0.3px", fontVariantNumeric: "tabular-nums" }}>
-                              {p.price.toFixed(4)} <span style={{ fontSize: 10, color: C.muted, fontWeight: 500 }}>{p.currency}</span>
-                            </div>
-                            <div style={{ fontSize: 10, color: C.dim, marginTop: 2 }}>as of {fmtDate(p.updatedAt.split("T")[0])}</div>
-                          </>
-                        ) : (
-                          <div style={{ fontSize: 11, color: C.muted }}>not fetched yet</div>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
-              </Card>
+                    )
+                  })}
+                </div>
+              </div>
             )}
 
             <ToggleRow

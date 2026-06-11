@@ -32,12 +32,19 @@ export function BucketTag({ bucket }: { bucket: Bucket }) {
 /* ── Empty state ─────────────────────────────────────────────────── */
 export function Empty({ icon, label, sub }: { icon: string; label: string; sub?: string }) {
   return (
-    <div style={{ textAlign: "center", padding: "3rem 1rem" }}>
-      <div style={{ display: "inline-flex", marginBottom: 14, color: C.dim }}>
-        <Icon name={icon} size={34} stroke={1.6} />
+    <div style={{ textAlign: "center", padding: "2.5rem 1rem 2rem" }}>
+      <div style={{
+        display: "inline-flex", marginBottom: 16,
+        width: 64, height: 64, borderRadius: 20,
+        background: `linear-gradient(135deg, ${C.cardHi} 0%, ${C.card} 100%)`,
+        border: `1px solid ${C.border}`,
+        alignItems: "center", justifyContent: "center",
+        color: C.muted,
+      }}>
+        <Icon name={icon} size={28} stroke={1.6} />
       </div>
-      <div style={{ fontSize: 14, fontWeight: 600, color: C.muted, marginBottom: 4 }}>{label}</div>
-      {sub && <div style={{ fontSize: 12, color: C.dim }}>{sub}</div>}
+      <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 4, letterSpacing: "-0.2px" }}>{label}</div>
+      {sub && <div style={{ fontSize: 12, color: C.dim, lineHeight: 1.5, maxWidth: 280, margin: "0 auto" }}>{sub}</div>}
     </div>
   )
 }
