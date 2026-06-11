@@ -545,6 +545,8 @@ export default function Dashboard() {
         {tab === "Overview" && (
           <HomeScreen
             moName={moName}
+            prevMoName={prevDate.toLocaleString("en-US", { month: "long" })}
+            prevIncMXN={prevIncMXN}
             onNavigate={handleHomeNav}
             fxSource={fxSource}
             currentCash={currentCash}

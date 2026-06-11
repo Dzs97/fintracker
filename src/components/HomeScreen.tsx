@@ -19,6 +19,8 @@ export type HomeNavTarget =
 
 export interface HomeProps {
   moName: string
+  prevMoName: string
+  prevIncMXN: number
   onNavigate: (target: HomeNavTarget) => void
   fxSource?: string
   // hero
@@ -86,7 +88,7 @@ function AmountDisplay({ value, color, size = 48, suffix }: { value: number; col
 
 export function HomeScreen(props: HomeProps) {
   const {
-    moName, onNavigate, fxSource, currentCash, totalIncMXN, totalIncUSD, totalExpMXN,
+    moName, prevMoName, prevIncMXN, onNavigate, fxSource, currentCash, totalIncMXN, totalIncUSD, totalExpMXN,
     monthInvMXN, monthCCTotal, monthExpCount, monthCCCount, monthInvCount,
     ccPoolTotal, ccWarning, cashDelta, fxRate,
     catTotals, catGrand, catPrev,
@@ -198,6 +200,69 @@ export function HomeScreen(props: HomeProps) {
         <StatTile label="Cards"    value={monthCCTotal} sub={`${monthCCCount} charges`} color={C.amber} icon="cards"   gradient={G.cards}  onClick={() => onNavigate("cards")} />
         <StatTile label="Invested" value={monthInvMXN}  sub={`${monthInvCount} buys`}    color={C.blue}  icon="invest"  gradient={G.invest} onClick={() => onNavigate("invest")} />
       </div>
+
+      {/* ── Month recap vs last month ─────────────────────────── */}
+      {(() => {
+        const prevSpent = Object.values(catPrev).reduce((s, v) => s + v, 0)
+        const curSpent = catGrand
+        if (prevSpent === 0 && prevIncMXN === 0) return null  // no history yet
+        const spentDelta = prevSpent > 0 ? ((curSpent - prevSpent) / prevSpent) * 100 : null
+        const incDelta = prevIncMXN > 0 ? ((totalIncMXN - prevIncMXN) / prevIncMXN) * 100 : null
+        // Biggest absolute mover across categories
+        let mover: { cat: string; diff: number } | null = null
+        const cats = new Set([...Object.keys(catTotals), ...Object.keys(catPrev)])
+        for (const cat of cats) {
+          const diff = (catTotals[cat] ?? 0) - (catPrev[cat] ?? 0)
+          if (!mover || Math.abs(diff) > Math.abs(mover.diff)) mover = { cat, diff }
+        }
+        const Row = ({ label, value, delta, invert }: { label: string; value: string; delta: number | null; invert?: boolean }) => {
+          const good = delta === null ? null : invert ? delta <= 0 : delta >= 0
+          const color = delta === null ? C.dim : good ? C.green : C.red
+          return (
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 0" }}>
+              <span style={{ fontSize: 12, color: C.muted }}>{label}</span>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: C.text, fontVariantNumeric: "tabular-nums" }}>{value}</span>
+                {delta !== null && (
+                  <span style={{ fontSize: 10.5, fontWeight: 700, color, background: color + "1A", padding: "2px 8px", borderRadius: 100 }}>
+                    {delta >= 0 ? "↑" : "↓"}{Math.abs(delta).toFixed(0)}%
+                  </span>
+                )}
+              </span>
+            </div>
+          )
+        }
+        return (
+          <Card style={{ padding: 18, marginBottom: 16, background: G.card }}>
+            <Label>{moName} vs {prevMoName}</Label>
+            <Row label="Spent (incl. cards)" value={fmt(curSpent)} delta={spentDelta} invert />
+            <div style={{ borderTop: `1px solid ${C.border}` }} />
+            <Row label="Income" value={fmt(totalIncMXN)} delta={incDelta} />
+            {mover && Math.abs(mover.diff) > 0 && (
+              <>
+                <div style={{ borderTop: `1px solid ${C.border}` }} />
+                <button
+                  onClick={() => onNavigate({ kind: "category", cat: mover!.cat })}
+                  style={{
+                    width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center",
+                    padding: "7px 0", background: "transparent", border: "none", cursor: "pointer",
+                    fontFamily: "inherit", WebkitTapHighlightColor: "transparent",
+                  }}
+                >
+                  <span style={{ fontSize: 12, color: C.muted, display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    Biggest mover
+                    <span style={{ width: 7, height: 7, borderRadius: "50%", background: CAT_COLORS[mover.cat] ?? C.muted }} />
+                    <span style={{ color: C.text, fontWeight: 600 }}>{mover.cat}</span>
+                  </span>
+                  <span style={{ fontSize: 12.5, fontWeight: 700, color: mover.diff > 0 ? C.red : C.green, fontVariantNumeric: "tabular-nums" }}>
+                    {mover.diff > 0 ? "+" : "−"}{fmt(Math.abs(mover.diff))}
+                  </span>
+                </button>
+              </>
+            )}
+          </Card>
+        )
+      })()}
 
       {/* ── Net worth card (tappable → Invest) ────────────────── */}
       <button

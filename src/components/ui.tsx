@@ -138,47 +138,139 @@ interface EntryRowProps {
   isLast?: boolean
   index?: number   // optional position used for stagger delay
 }
+/** Width of the revealed swipe-action area (px). One or two 64px buttons. */
+const SWIPE_ACTION = 64
+
 export function EntryRow({ icon, iconBg, name, sub, amount, amtColor, onDel, onEdit, rightExtra, isLast, index }: EntryRowProps) {
   const [pressed, setPressed] = React.useState(false)
+  const [dragX, setDragX] = React.useState(0)        // current translateX (≤ 0)
+  const [openX, setOpenX] = React.useState(0)        // settled position
+  const [animating, setAnimating] = React.useState(true)
+  const touchRef = React.useRef<{ x: number; y: number; swiping: boolean | null } | null>(null)
+  const actionsWidth = (onEdit ? SWIPE_ACTION : 0) + (onDel ? SWIPE_ACTION : 0)
   // Cap stagger so a 50-item list doesn't take 1.5s to fully reveal
   const delay = index != null ? Math.min(index, 12) * 25 : 0
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    if (actionsWidth === 0) return
+    const t = e.touches[0]
+    touchRef.current = { x: t.clientX, y: t.clientY, swiping: null }
+    setAnimating(false)
+  }
+  const onTouchMove = (e: React.TouchEvent) => {
+    const ref = touchRef.current
+    if (!ref) return
+    const t = e.touches[0]
+    const dx = t.clientX - ref.x
+    const dy = t.clientY - ref.y
+    // Lock direction on the first meaningful move: horizontal → swipe, vertical → scroll
+    if (ref.swiping === null && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
+      ref.swiping = Math.abs(dx) > Math.abs(dy)
+    }
+    if (!ref.swiping) return
+    const next = Math.max(-actionsWidth - 16, Math.min(0, openX + dx))
+    setDragX(next)
+  }
+  const onTouchEnd = () => {
+    const ref = touchRef.current
+    touchRef.current = null
+    setAnimating(true)
+    if (!ref?.swiping) return
+    // Snap: open if dragged past half the action area, else close
+    const settled = dragX < -actionsWidth / 2 ? -actionsWidth : 0
+    setOpenX(settled)
+    setDragX(settled)
+  }
+  const wasSwiped = openX !== 0
+  const closeSwipe = () => { setOpenX(0); setDragX(0) }
+
   return (
     <div
       className="ft-row-in"
-      onClick={onEdit ?? undefined}
-      onPointerDown={() => onEdit && setPressed(true)}
-      onPointerUp={() => setPressed(false)}
-      onPointerLeave={() => setPressed(false)}
       style={{
-        display: "flex", alignItems: "center", gap: 12, padding: "14px 16px",
+        position: "relative", overflow: "hidden",
         borderBottom: isLast ? "none" : `1px solid ${C.border}`,
-        cursor: onEdit ? "pointer" : undefined,
-        WebkitTapHighlightColor: "transparent",
-        background: pressed ? C.cardHi : "transparent",
-        transition: "background 100ms cubic-bezier(0.4,0,0.2,1)",
         animationDelay: `${delay}ms`,
-      }}>
-      <div style={{
-        width: 38, height: 38, borderRadius: 11, background: iconBg,
-        display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-      }}>{icon}</div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 14.5, fontWeight: 600, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</div>
-        <div style={{ fontSize: 11.5, color: C.muted, marginTop: 3 }}>{sub}</div>
-      </div>
-      {rightExtra}
-      <div style={{ fontSize: 15, fontWeight: 700, color: amtColor, flexShrink: 0, letterSpacing: "-0.3px" }}>{amount}</div>
-      {onDel && (
-        <button
-          onClick={e => { e.stopPropagation(); onDel() }}
-          style={{
-            background: "none", border: "none", cursor: "pointer", color: C.dim,
-            padding: 2, flexShrink: 0, display: "flex",
-          }}
-        >
-          <Icon name="close" size={16} />
-        </button>
+      }}
+    >
+      {/* Action layer behind the row */}
+      {actionsWidth > 0 && (
+        <div style={{ position: "absolute", top: 0, right: 0, bottom: 0, display: "flex" }}>
+          {onEdit && (
+            <button
+              onClick={() => { closeSwipe(); onEdit() }}
+              style={{
+                width: SWIPE_ACTION, border: "none", cursor: "pointer",
+                background: C.blueDim, color: C.blue,
+                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3,
+                fontSize: 9.5, fontWeight: 700, fontFamily: "inherit",
+              }}
+            >
+              <Icon name="expenses" size={16} color={C.blue} />Edit
+            </button>
+          )}
+          {onDel && (
+            <button
+              onClick={() => { closeSwipe(); onDel() }}
+              style={{
+                width: SWIPE_ACTION, border: "none", cursor: "pointer",
+                background: C.redDim, color: C.red,
+                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3,
+                fontSize: 9.5, fontWeight: 700, fontFamily: "inherit",
+              }}
+            >
+              <Icon name="trash" size={16} color={C.red} />Delete
+            </button>
+          )}
+        </div>
       )}
+
+      {/* Foreground row */}
+      <div
+        onClick={() => {
+          if (wasSwiped) { closeSwipe(); return }
+          onEdit?.()
+        }}
+        onPointerDown={() => onEdit && setPressed(true)}
+        onPointerUp={() => setPressed(false)}
+        onPointerLeave={() => setPressed(false)}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        style={{
+          display: "flex", alignItems: "center", gap: 12, padding: "14px 16px",
+          cursor: onEdit ? "pointer" : undefined,
+          WebkitTapHighlightColor: "transparent",
+          background: pressed && !wasSwiped ? C.cardHi : C.card,
+          transform: `translateX(${dragX}px)`,
+          transition: animating
+            ? "transform 200ms cubic-bezier(0.4,0,0.2,1), background 100ms cubic-bezier(0.4,0,0.2,1)"
+            : "background 100ms cubic-bezier(0.4,0,0.2,1)",
+          position: "relative",
+        }}
+      >
+        <div style={{
+          width: 38, height: 38, borderRadius: 11, background: iconBg,
+          display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+        }}>{icon}</div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 14.5, fontWeight: 600, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</div>
+          <div style={{ fontSize: 11.5, color: C.muted, marginTop: 3 }}>{sub}</div>
+        </div>
+        {rightExtra}
+        <div style={{ fontSize: 15, fontWeight: 700, color: amtColor, flexShrink: 0, letterSpacing: "-0.3px" }}>{amount}</div>
+        {onDel && (
+          <button
+            onClick={e => { e.stopPropagation(); onDel() }}
+            style={{
+              background: "none", border: "none", cursor: "pointer", color: C.dim,
+              padding: 2, flexShrink: 0, display: "flex",
+            }}
+          >
+            <Icon name="close" size={16} />
+          </button>
+        )}
+      </div>
     </div>
   )
 }
