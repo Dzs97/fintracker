@@ -524,7 +524,7 @@ export default function Dashboard() {
         refreshing={refreshing}
       />
 
-      <div style={{ flex: 1, overflow: "auto", WebkitOverflowScrolling: "touch", paddingBottom: 90 }}>
+      <div key={tab} className="ft-fade-up" style={{ flex: 1, overflow: "auto", WebkitOverflowScrolling: "touch", paddingBottom: 90 }}>
 
         {/* ══ OVERVIEW ══ */}
         {tab === "Overview" && (
@@ -750,7 +750,7 @@ export default function Dashboard() {
                       return (
                         <EntryRow
                           key={e.id}
-                          isLast={i === arr.length - 1}
+                          isLast={i === arr.length - 1} index={i}
                           icon={<div style={{ width: 11, height: 11, borderRadius: 3, background: CAT_COLORS[e.cat] ?? C.amber }} />}
                           iconBg={(CAT_COLORS[e.cat] ?? C.amber) + "22"}
                           name={
@@ -831,7 +831,7 @@ export default function Dashboard() {
                     {[...filtered].sort((a, b) => b.date.localeCompare(a.date)).map((e, i, arr) => (
                       <EntryRow
                         key={e.id}
-                        isLast={i === arr.length - 1}
+                        isLast={i === arr.length - 1} index={i}
                         icon={<div style={{ width: 11, height: 11, borderRadius: "50%", background: CAT_COLORS[e.cat] ?? C.muted }} />}
                         iconBg={(CAT_COLORS[e.cat] ?? C.muted) + "22"}
                         name={e.name}
@@ -880,7 +880,7 @@ export default function Dashboard() {
                   {[...filtered].sort((a, b) => b.date.localeCompare(a.date)).map((e, i, arr) => (
                     <EntryRow
                       key={e.id}
-                      isLast={i === arr.length - 1}
+                      isLast={i === arr.length - 1} index={i}
                       icon={<Icon name="income" size={18} color={C.green} />}
                       iconBg={C.green + "22"}
                       name={e.name}
@@ -1279,7 +1279,7 @@ export default function Dashboard() {
                         return (
                           <EntryRow
                             key={e.id}
-                            isLast={i === arr.length - 1}
+                            isLast={i === arr.length - 1} index={i}
                             icon={<div style={{ width: 11, height: 11, borderRadius: e.inv_type === "stock" ? 3 : "50%", background: bucket.color }} />}
                             iconBg={bucket.dim}
                             name={
@@ -1345,8 +1345,8 @@ export default function Dashboard() {
 
       {/* Undo toast */}
       {toast && (
-        <div style={{
-          position: "fixed", left: 14, right: 14, bottom: 80, zIndex: 100,
+        <div className="ft-slide-up" style={{
+          position: "fixed", left: 14, right: 14, bottom: 88, zIndex: 100,
           background: C.cardHi, border: `1px solid ${C.border}`, borderRadius: 14,
           padding: "12px 14px", boxShadow: "0 10px 30px rgba(0,0,0,0.4)",
           display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,

@@ -33,3 +33,38 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.6); }
   100% { background-color: #1C1E23; border-color: #2A2C32; }
 }
 .flash { animation: heroFlash 600ms ease-out; }
+
+/* ── Motion primitives ─────────────────────────────────────────── */
+
+/* Soft upward fade for tab content + cards on mount */
+@keyframes ftFadeUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.ft-fade-up { animation: ftFadeUp 280ms cubic-bezier(0.4, 0, 0.2, 1) both; }
+
+/* Tiny scale-fade — used for list rows so they ripple in */
+@keyframes ftRowIn {
+  from { opacity: 0; transform: translateY(4px) scale(0.99); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.ft-row-in { animation: ftRowIn 240ms cubic-bezier(0.4, 0, 0.2, 1) both; }
+
+/* Slide up from the bottom of the viewport */
+@keyframes ftSlideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.ft-slide-up { animation: ftSlideUp 220ms cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+
+/* Donut stroke-dashoffset reveal */
+@keyframes ftDashIn {
+  from { stroke-dasharray: 0 9999; }
+}
+.ft-dash-in circle[stroke-dasharray] { animation: ftDashIn 700ms cubic-bezier(0.4, 0, 0.2, 1) both; }
+
+/* Honour reduced-motion preference */
+@media (prefers-reduced-motion: reduce) {
+  .ft-fade-up, .ft-row-in, .ft-slide-up, .ft-dash-in circle { animation: none !important; }
+  * { transition-duration: 0.01ms !important; }
+}

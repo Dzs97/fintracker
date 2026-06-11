@@ -136,11 +136,15 @@ interface EntryRowProps {
   onEdit?: (() => void) | null
   rightExtra?: React.ReactNode
   isLast?: boolean
+  index?: number   // optional position used for stagger delay
 }
-export function EntryRow({ icon, iconBg, name, sub, amount, amtColor, onDel, onEdit, rightExtra, isLast }: EntryRowProps) {
+export function EntryRow({ icon, iconBg, name, sub, amount, amtColor, onDel, onEdit, rightExtra, isLast, index }: EntryRowProps) {
   const [pressed, setPressed] = React.useState(false)
+  // Cap stagger so a 50-item list doesn't take 1.5s to fully reveal
+  const delay = index != null ? Math.min(index, 12) * 25 : 0
   return (
     <div
+      className="ft-row-in"
       onClick={onEdit ?? undefined}
       onPointerDown={() => onEdit && setPressed(true)}
       onPointerUp={() => setPressed(false)}
@@ -152,6 +156,7 @@ export function EntryRow({ icon, iconBg, name, sub, amount, amtColor, onDel, onE
         WebkitTapHighlightColor: "transparent",
         background: pressed ? C.cardHi : "transparent",
         transition: "background 100ms cubic-bezier(0.4,0,0.2,1)",
+        animationDelay: `${delay}ms`,
       }}>
       <div style={{
         width: 38, height: 38, borderRadius: 11, background: iconBg,

@@ -135,7 +135,7 @@ export function CardTile({ card, cfg, pool, currentCycleTotal, statementBalance,
 
       {/* ── Expanded body ────────────────────────────────────────────────── */}
       {open && (
-        <div style={{ padding: "16px 18px 18px", background: C.card }}>
+        <div className="ft-fade-up" style={{ padding: "16px 18px 18px", background: C.card }}>
           {!cfg ? (
             <div style={{ fontSize: 12, color: C.dim, padding: "12px 0", textAlign: "center" }}>
               Configure cutoff + due day in Invest → Maps to enable statement tracking.
