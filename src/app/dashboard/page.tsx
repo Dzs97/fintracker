@@ -67,6 +67,8 @@ export default function Dashboard() {
   const [catFilter, setCatFilter] = useState<string | null>(null)
   // Asset drill-down sheet (opened from P&L cards)
   const [assetDetail, setAssetDetail] = useState<AssetSelection | null>(null)
+  // Bucket filter on the Invest tab (set by tapping a hero bucket tile)
+  const [bucketFilter, setBucketFilter] = useState<string | null>(null)
   const handleHomeNav = (target: HomeNavTarget) => {
     if (typeof target === "string") {
       setCatFilter(null)
@@ -332,6 +334,12 @@ export default function Dashboard() {
   })
   const bucketTotals: Record<string, number> = {}
   BUCKETS.forEach(b => { bucketTotals[b.id] = state.investments.filter(i => i.gf === b.gf && i.inv_type === b.type).reduce((s, i) => s + i.amount, 0) })
+  // True when (gf, type) matches the active Invest bucket filter (or no filter)
+  const matchesBucket = (gf: boolean, type: "fund" | "stock") => {
+    if (!bucketFilter) return true
+    const b = BUCKETS.find(x => x.id === bucketFilter)
+    return !!b && b.gf === gf && b.type === type
+  }
   const assetBreakdown = (gf: boolean, type: "fund" | "stock"): Array<[string, number]> => {
     const map: Record<string, number> = {}
     state.investments.filter(i => i.gf === gf && i.inv_type === type).forEach(i => { map[i.name] = (map[i.name] ?? 0) + i.amount })
@@ -942,26 +950,47 @@ export default function Dashboard() {
                 </div>
                 <div style={{ fontSize: 11, color: C.dim, marginTop: 8 }}>all-time cost basis</div>
 
-                {/* Bucket grid */}
+                {/* Bucket grid — tap a tile to filter the views below to that bucket */}
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 18 }}>
-                  {BUCKETS.map(b => (
-                    <div key={b.id} style={{
-                      background: C.card, border: `1px solid ${b.color}33`, borderRadius: 14,
-                      padding: "12px 14px", position: "relative", overflow: "hidden",
-                    }}>
-                      <div style={{
-                        position: "absolute", top: -20, right: -20, width: 60, height: 60, borderRadius: "50%",
-                        background: b.color, opacity: 0.10, pointerEvents: "none",
-                      }} />
-                      <div style={{ position: "relative" }}>
-                        <div style={{ fontSize: 10, color: b.color, textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 700 }}>{b.label}</div>
-                        <div style={{ fontSize: 17, fontWeight: 800, color: C.text, letterSpacing: "-0.4px", marginTop: 6, fontVariantNumeric: "tabular-nums" }}>
-                          {fmt(bucketTotals[b.id])}
+                  {BUCKETS.map(b => {
+                    const active = bucketFilter === b.id
+                    return (
+                      <button
+                        key={b.id}
+                        onClick={() => {
+                          buzz()
+                          if (active) { setBucketFilter(null); return }
+                          setBucketFilter(b.id)
+                          if (activeInvTab === "maps") setActiveInvTab("portfolio")
+                        }}
+                        style={{
+                          background: active ? b.dim : C.card,
+                          border: `1px solid ${active ? b.color : b.color + "33"}`,
+                          borderRadius: 14,
+                          padding: "12px 14px", position: "relative", overflow: "hidden",
+                          cursor: "pointer", textAlign: "left", fontFamily: "inherit",
+                          WebkitTapHighlightColor: "transparent",
+                          transition: "background 200ms cubic-bezier(0.4,0,0.2,1), border 200ms cubic-bezier(0.4,0,0.2,1)",
+                        }}
+                      >
+                        <div style={{
+                          position: "absolute", top: -20, right: -20, width: 60, height: 60, borderRadius: "50%",
+                          background: b.color, opacity: active ? 0.22 : 0.10, pointerEvents: "none",
+                          transition: "opacity 200ms",
+                        }} />
+                        <div style={{ position: "relative" }}>
+                          <div style={{ fontSize: 10, color: b.color, textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 700, display: "flex", alignItems: "center", gap: 5 }}>
+                            {b.label}
+                            {active && <Icon name="check" size={10} color={b.color} />}
+                          </div>
+                          <div style={{ fontSize: 17, fontWeight: 800, color: C.text, letterSpacing: "-0.4px", marginTop: 6, fontVariantNumeric: "tabular-nums" }}>
+                            {fmt(bucketTotals[b.id])}
+                          </div>
+                          <div style={{ fontSize: 9.5, color: C.dim, marginTop: 2 }}>MXN</div>
                         </div>
-                        <div style={{ fontSize: 9.5, color: C.dim, marginTop: 2 }}>MXN</div>
-                      </div>
-                    </div>
-                  ))}
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
             </div>
@@ -1029,6 +1058,24 @@ export default function Dashboard() {
               options={[{ value: "portfolio", label: "Portfolio" }, { value: "pl", label: "P&L" }, { value: "history", label: "History" }, { value: "maps", label: "Maps" }]}
             />
 
+            {/* Active bucket filter chip */}
+            {bucketFilter && (() => {
+              const b = BUCKETS.find(x => x.id === bucketFilter)
+              if (!b) return null
+              return (
+                <button onClick={() => setBucketFilter(null)} style={{
+                  display: "inline-flex", alignItems: "center", gap: 6, marginBottom: 10,
+                  padding: "6px 12px", fontSize: 11.5, fontFamily: "inherit", fontWeight: 700,
+                  border: "none", borderRadius: 100, cursor: "pointer",
+                  background: b.color + "22", color: b.color,
+                }}>
+                  <span style={{ width: 7, height: 7, borderRadius: "50%", background: b.color }} />
+                  {b.label}
+                  <Icon name="close" size={11} color={b.color} />
+                </button>
+              )
+            })()}
+
             {activeInvTab === "portfolio" && (
               <>
                 <Card style={{ padding: 16, marginBottom: 14 }}>
@@ -1038,7 +1085,7 @@ export default function Dashboard() {
                     {last6.map(p => <span key={p.label} style={{ fontSize: 9, color: C.dim }}>{p.label}</span>)}
                   </div>
                 </Card>
-                {BUCKETS.map(b => {
+                {BUCKETS.filter(b => !bucketFilter || b.id === bucketFilter).map(b => {
                   const assets = assetBreakdown(b.gf, b.type)
                   const total = bucketTotals[b.id]
                   if (!assets.length) return null
@@ -1091,10 +1138,10 @@ export default function Dashboard() {
                     {priceBusy ? "Refreshing…" : "Refresh prices"}
                   </button>
                 </div>
-                {Object.entries(invByName).length === 0 ? (
+                {Object.entries(invByName).filter(([, v]) => matchesBucket(v.gf, "stock")).length === 0 ? (
                   <Empty icon="invest" label="No stock positions yet" sub="Log a buy to start tracking" />
                 ) : (
-                  Object.entries(invByName).map(([key, { name, gf, cost, shares }]) => {
+                  Object.entries(invByName).filter(([, v]) => matchesBucket(v.gf, "stock")).map(([key, { name, gf, cost, shares }]) => {
                     const p = state.prices?.[name]
                     const cur = p?.price ?? 0
                     const valMXN = shares > 0 ? shares * cur * FX : 0
@@ -1217,10 +1264,10 @@ export default function Dashboard() {
                 )}
 
                 {/* ── Funds ── */}
-                {Object.keys(fundByName).length > 0 && (
+                {Object.entries(fundByName).some(([, v]) => matchesBucket(v.gf, "fund")) && (
                   <>
                     <div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 600, margin: "18px 0 10px" }}>Funds (MXN)</div>
-                    {Object.entries(fundByName).map(([key, { name, gf, cost, shares, uncoveredCost }]) => {
+                    {Object.entries(fundByName).filter(([, v]) => matchesBucket(v.gf, "fund")).map(([key, { name, gf, cost, shares, uncoveredCost }]) => {
                       const p = state.prices?.[name]
                       const cur = p?.price ?? 0   // fund NAV in MXN
                       const valMXN = shares > 0 ? shares * cur : 0
@@ -1298,7 +1345,7 @@ export default function Dashboard() {
               <>
                 <SearchBar value={search.inv} onChange={v => setSearch(s => ({ ...s, inv: v }))} placeholder="Search investments…" />
                 {(() => {
-                  const filtered = state.investments.filter(e => e.name.toLowerCase().includes(search.inv.toLowerCase()))
+                  const filtered = state.investments.filter(e => matchesBucket(e.gf, e.inv_type) && e.name.toLowerCase().includes(search.inv.toLowerCase()))
                   return filtered.length === 0 ? (
                     <Empty icon="invest" label="No investments logged yet" sub={search.inv ? "Try a different search" : "Log a buy to start"} />
                   ) : (
