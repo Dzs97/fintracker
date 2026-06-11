@@ -32,5 +32,10 @@ export async function PUT(req: NextRequest) {
   await setFxConfig(cfg)
   const baseRate = await getFxRate()
   const { rate, source } = applyFxConfig(baseRate, cfg)
-  return NextResponse.json({ ok: true, rate, baseRate, source, ...cfg })
+  return NextResponse.json({
+    ok: true,
+    rate, baseRate, source,
+    markupPct: cfg.markupPct,
+    fixedRate: cfg.fixedRate,
+  })
 }
