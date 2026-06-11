@@ -7,7 +7,7 @@ import { useCallback, useEffect, useState } from "react"
 import type { AppState } from "@/types"
 import {
   C, FX_FALLBACK, CAT_COLORS, CATS, CC_CARDS, BUCKETS, getBucket,
-  expandCC, fmt, fmtDate, today,
+  expandCC, fmt, fmtDate, today, buzz,
 } from "@/lib/utils"
 import { Icon } from "@/components/Icon"
 import {
@@ -109,39 +109,32 @@ export default function Dashboard() {
 
   const triggerFlash = () => { setHeroFlash(true); setTimeout(() => setHeroFlash(false), 600) }
 
-  const load = useCallback(async () => {
-    setRefreshing(true)
+  // One round trip for everything. `silent` skips the refresh spinner —
+  // used for background reconciles after optimistic mutations.
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setRefreshing(true)
     try {
-      const [entries, ccData, invData, budgets, fx, tickerData, fundData, splitData, cfgData, recData, obData] = await Promise.all([
-        api<{ expenses: AppState["expenses"]; income: AppState["income"] }>("/api/entries"),
-        api<{ cc: AppState["cc"]; settled: AppState["settled"] }>("/api/cc"),
-        api<{ investments: AppState["investments"]; prices: AppState["prices"] }>("/api/investments"),
-        api<{ budgets: AppState["budgets"] }>("/api/budgets"),
-        api<{ rate: number; source?: string }>("/api/fx"),
-        api<{ tickers: Record<string, string> }>("/api/prices"),
-        api<{ funds: Record<string, string> }>("/api/funds"),
-        api<{ splits: typeof splits }>("/api/splits"),
-        api<{ config: Record<string, CardConfig> }>("/api/cards/config"),
-        api<{ recurring: Recurring[] }>("/api/recurring"),
-        api<{ obligations: FutureObligation[] }>("/api/obligations"),
-      ])
-      setTickers(tickerData.tickers ?? {})
-      setFunds(fundData.funds ?? {})
-      setSplits(splitData.splits ?? {})
-      setCardConfig(cfgData.config ?? {})
-      setRecurring(recData.recurring ?? [])
-      setObligations(obData.obligations ?? [])
-      setFxSource(fx.source)
-      setState({
-        expenses: entries.expenses, income: entries.income,
-        cc: ccData.cc, settled: ccData.settled,
-        investments: invData.investments, prices: invData.prices,
-        budgets: budgets.budgets,
-        fxRate: fx.rate ?? FX_FALLBACK,
-      })
+      const d = await api<{
+        state: AppState
+        fx: { rate: number; baseRate: number; source?: string }
+        tickers: Record<string, string>
+        funds: Record<string, string>
+        splits: typeof splits
+        cardConfig: Record<string, CardConfig>
+        recurring: Recurring[]
+        obligations: FutureObligation[]
+      }>("/api/state")
+      setTickers(d.tickers)
+      setFunds(d.funds)
+      setSplits(d.splits)
+      setCardConfig(d.cardConfig)
+      setRecurring(d.recurring)
+      setObligations(d.obligations)
+      setFxSource(d.fx.source)
+      setState({ ...d.state, fxRate: d.fx.rate ?? FX_FALLBACK })
     } finally {
       setLoading(false)
-      setTimeout(() => setRefreshing(false), 600)
+      if (!opts?.silent) setTimeout(() => setRefreshing(false), 600)
     }
   }, [])
 
@@ -342,82 +335,102 @@ export default function Dashboard() {
     return Object.entries(map).sort((a, b) => b[1] - a[1])
   }
 
-  /* ── mutations ── */
+  /* ── mutations ──
+   * Pattern: apply the change to local state FIRST (instant UI), fire the
+   * API call, then a silent background reconcile. If the API call throws,
+   * the reconcile restores server truth. */
+  const reconcile = () => load({ silent: true })
   const closeForms = () => { setShowForm(false); setQuickAdd(null) }
   const addExpense = async () => {
     if (!form.expName || !form.expAmt) return
-    await api("/api/entries", "POST", { type: "expense", name: form.expName, amount: parseFloat(form.expAmt), cat: form.expCat, date: form.expDate || today(), note: form.expNote })
+    const entry = { id: `tmp-${Date.now()}`, name: form.expName, amount: parseFloat(form.expAmt), cat: form.expCat as Expense["cat"], date: form.expDate || today(), note: form.expNote }
+    setState(s => s && ({ ...s, expenses: [...s.expenses, entry] }))
     setForm(f => ({ ...f, expName: "", expAmt: "", expNote: "" }))
-    closeForms(); triggerFlash(); load()
+    closeForms(); triggerFlash(); buzz()
+    try { await api("/api/entries", "POST", { type: "expense", ...entry, id: undefined }) } finally { reconcile() }
   }
   const addIncome = async () => {
     if (!form.incName || !form.incAmt) return
-    await api("/api/entries", "POST", { type: "income", name: form.incName, amount: parseFloat(form.incAmt), date: form.incDate || today(), note: form.incNote })
+    const entry = { id: `tmp-${Date.now()}`, name: form.incName, amount: parseFloat(form.incAmt), date: form.incDate || today(), note: form.incNote }
+    setState(s => s && ({ ...s, income: [...s.income, entry] }))
     setForm(f => ({ ...f, incName: "", incAmt: "", incNote: "" }))
-    closeForms(); triggerFlash(); load()
+    closeForms(); triggerFlash(); buzz()
+    try { await api("/api/entries", "POST", { type: "income", ...entry, id: undefined }) } finally { reconcile() }
   }
   const addCC = async () => {
     if (!form.ccName || !form.ccAmt) return
-    await api("/api/cc", "POST", { name: form.ccName, amount: parseFloat(form.ccAmt), date: form.ccDate || today(), cat: form.ccCat, card: form.ccCard, installments: Number(form.ccInstallments) || 1 })
+    const entry = { id: `tmp-${Date.now()}`, name: form.ccName, amount: parseFloat(form.ccAmt), date: form.ccDate || today(), cat: form.ccCat as CCCharge["cat"], card: form.ccCard, installments: Number(form.ccInstallments) || 1 }
+    setState(s => s && ({ ...s, cc: [...s.cc, entry] }))
     setForm(f => ({ ...f, ccName: "", ccAmt: "", ccInstallments: 1 }))
-    closeForms(); triggerFlash(); load()
+    closeForms(); triggerFlash(); buzz()
+    try { await api("/api/cc", "POST", { ...entry, id: undefined }) } finally { reconcile() }
   }
   const addInvestment = async () => {
     if (!form.invName || !form.invAmt) return
-    await api("/api/investments", "POST", { name: form.invName, amount: parseFloat(form.invAmt), date: form.invDate || today(), note: form.invNote, gf: form.invGf, inv_type: form.invType })
+    // Investments may split server-side — show the un-split entry until reconcile
+    const entry = { id: `tmp-${Date.now()}`, name: form.invName, amount: parseFloat(form.invAmt), date: form.invDate || today(), note: form.invNote, gf: form.invGf, inv_type: form.invType }
+    setState(s => s && ({ ...s, investments: [...s.investments, entry] }))
     setForm(f => ({ ...f, invName: "", invAmt: "", invNote: "" }))
-    closeForms(); triggerFlash(); load()
+    closeForms(); triggerFlash(); buzz()
+    try { await api("/api/investments", "POST", { ...entry, id: undefined }) } finally { reconcile() }
   }
   const delEntry = async (type: "expense" | "income", id: string) => {
     const row = (type === "expense" ? state.expenses : state.income).find(e => e.id === id)
     if (!row) return
-    await api("/api/entries", "DELETE", { type, id })
-    await load()
+    buzz()
+    setState(s => s && (type === "expense"
+      ? { ...s, expenses: s.expenses.filter(e => e.id !== id) }
+      : { ...s, income: s.income.filter(e => e.id !== id) }))
     setToast({
       msg: `Deleted ${type}: ${row.name}`,
       restore: async () => {
         const { id: _drop, ...rest } = row
         await api("/api/entries", "POST", { type, ...rest })
-        await load()
+        await load({ silent: true })
       },
     })
+    try { await api("/api/entries", "DELETE", { type, id }) } catch { reconcile() }
   }
   const delCC = async (id: string) => {
     const row = state.cc.find(e => e.id === id)
     if (!row) return
-    await api("/api/cc", "DELETE", { id })
-    await load()
+    buzz()
+    setState(s => s && ({ ...s, cc: s.cc.filter(e => e.id !== id) }))
     setToast({
       msg: `Deleted charge: ${row.name}`,
       restore: async () => {
         const { id: _drop, ...rest } = row
         await api("/api/cc", "POST", rest)
-        await load()
+        await load({ silent: true })
       },
     })
+    try { await api("/api/cc", "DELETE", { id }) } catch { reconcile() }
   }
   const delInv = async (id: string) => {
     const row = state.investments.find(e => e.id === id)
     if (!row) return
-    await api("/api/investments", "DELETE", { id })
-    await load()
+    buzz()
+    setState(s => s && ({ ...s, investments: s.investments.filter(e => e.id !== id) }))
     setToast({
       msg: `Deleted: ${row.name}`,
       restore: async () => {
         // Bypass split rules on restore — submit the exact row back
         const { id: _drop, ...rest } = row
         await api("/api/investments", "POST", { ...rest, _skipSplit: true })
-        await load()
+        await load({ silent: true })
       },
     })
+    try { await api("/api/investments", "DELETE", { id }) } catch { reconcile() }
   }
   const settleCard = async (card: string) => {
     const pool = ccPoolByCard[card] ?? 0
     if (pool <= 0) return
     if (!confirm(`Settle ${card} — ${fmt(pool)} MXN?\n\nThis posts a real expense and zeros the unpaid pool.`)) return
-    await api("/api/cc", "PATCH", { card })
+    buzz(15)
+    // Optimistic: bump settled locally so the pool zeroes instantly
+    setState(s => s && ({ ...s, settled: { ...s.settled, [card]: (s.settled[card] ?? 0) + pool } }))
     triggerFlash()
-    load()
+    try { await api("/api/cc", "PATCH", { card }) } finally { reconcile() }
   }
   const updatePrice = async (ticker: string, price: number) => { await api("/api/investments", "PATCH", { ticker, price }); load() }
   const setTicker = async (name: string, ticker: string) => {

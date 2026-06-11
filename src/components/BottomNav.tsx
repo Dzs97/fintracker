@@ -1,5 +1,5 @@
 "use client"
-import { C } from "@/lib/utils"
+import { C, buzz } from "@/lib/utils"
 import { Icon } from "./Icon"
 
 export type NavTab = "Home" | "Money" | "Cards" | "Invest"
@@ -33,7 +33,7 @@ export function BottomNav({ active, onChange, onCenterAction }: Props) {
 
         {/* Center FAB */}
         <div style={{ flex: 0, position: "relative", width: 64, display: "flex", justifyContent: "center" }}>
-          <button onClick={onCenterAction} aria-label="Quick log" style={{
+          <button onClick={() => { buzz(); onCenterAction?.() }} aria-label="Quick log" style={{
             position: "absolute", top: -22,
             width: 56, height: 56, borderRadius: 28,
             background: C.green, border: `4px solid ${C.bg}`,

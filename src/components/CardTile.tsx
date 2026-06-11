@@ -1,6 +1,6 @@
 "use client"
 import { useState } from "react"
-import { C, G, fmt, fmtDate } from "@/lib/utils"
+import { C, G, fmt, fmtDate, buzz } from "@/lib/utils"
 import { Icon } from "./Icon"
 import { computeCycle, fmtDueLabel, type CardConfig } from "@/lib/cardCycles"
 import type { Statement } from "@/types"
@@ -50,6 +50,7 @@ export function CardTile({ card, cfg, pool, currentCycleTotal, statementBalance,
   async function payAmount(amount: number) {
     if (!statement || amount <= 0 || busy) return
     if (!confirm(`Record payment of ${fmt(amount)} MXN against ${card} ${statement.period}?\nThis creates a real expense.`)) return
+    buzz(15)
     setBusy(true)
     try { await recordPayment(statement.id, amount); await onPaymentRecorded() }
     finally { setBusy(false) }

@@ -132,6 +132,13 @@ export function inMonth(dateStr: string, y: number, m: number): boolean {
   return dy === y && dm - 1 === m
 }
 
+/** Tiny haptic tap on devices that support it (Android Chrome). No-op elsewhere. */
+export function buzz(ms = 10) {
+  try {
+    if (typeof navigator !== "undefined" && "vibrate" in navigator) navigator.vibrate(ms)
+  } catch { /* ignore */ }
+}
+
 export function nanoid(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2)
 }
