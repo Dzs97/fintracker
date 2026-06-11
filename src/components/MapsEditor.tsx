@@ -547,8 +547,9 @@ function FxConfigSection({ reload, smallInp }: { reload: () => Promise<void>; sm
     <Card style={{ padding: 16, marginBottom: 12 }}>
       <Label>FX rate</Label>
       <div style={{ fontSize: 11.5, color: C.dim, marginBottom: 10, lineHeight: 1.5 }}>
-        Default uses live interbank (open.er-api.com). Add a markup % to match a retail provider
-        like DolarApp (~+1.15%) or pin a fixed rate. Source label shows on the Home hero.
+        Default uses live interbank (open.er-api.com). Add an adjustment % to match a retail
+        provider — <span style={{ color: C.muted }}>negative for markdown</span> (e.g. DolarApp
+        pays ~−1.15% vs interbank), positive for markup. Or pin a fixed rate.
       </div>
       {cfg.baseRate != null && (
         <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
@@ -567,10 +568,10 @@ function FxConfigSection({ reload, smallInp }: { reload: () => Promise<void>; sm
           </div>
         </div>
       )}
-      <label style={lbl}>Markup % over interbank</label>
+      <label style={lbl}>Adjustment % over interbank</label>
       <input style={inp} type="number" step="0.01" value={cfg.markupPct}
         onChange={e => setCfg({ ...cfg, markupPct: e.target.value })}
-        placeholder="e.g. 1.15 for DolarApp" />
+        placeholder="e.g. -1.15 for DolarApp (markdown), 0.5 for Wise (markup)" />
       <label style={lbl}>Fixed rate (overrides markup)</label>
       <input style={inp} type="number" step="0.0001" value={cfg.fixedRate}
         onChange={e => setCfg({ ...cfg, fixedRate: e.target.value })}
@@ -591,7 +592,7 @@ function FxConfigSection({ reload, smallInp }: { reload: () => Promise<void>; sm
         }}>Save</button>
       </div>
       <div style={{ fontSize: 10, color: C.dim, marginTop: 8 }}>
-        Tip: leave both empty → app uses pure interbank. Use just markup to track DolarApp/Wise dynamically as interbank moves.
+        Tip: leave both empty → app uses pure interbank. Negative adjustment tracks DolarApp as interbank moves (they pay below market by ~1.15%).
       </div>
     </Card>
   )
