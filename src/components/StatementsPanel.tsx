@@ -84,8 +84,16 @@ export function StatementsPanel({ statements, ccExpanded, cardConfig, reload }: 
   })
 
   return (
-    <Card style={{ padding: 16, marginBottom: 14 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+    <div style={{
+      position: "relative", overflow: "hidden",
+      background: C.card, border: `1px solid ${C.border}`,
+      borderRadius: 22, padding: "18px 18px 16px", marginBottom: 16,
+    }}>
+      <div style={{
+        position: "absolute", top: -50, right: -40, width: 160, height: 160, borderRadius: "50%",
+        background: `radial-gradient(circle, ${C.amber}1A, transparent 70%)`, pointerEvents: "none",
+      }} />
+      <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
         <Label style={{ marginBottom: 0 }}>Statements</Label>
         <button onClick={() => setAdding(v => !v)} style={{
           padding: "6px 12px", fontSize: 11.5, fontWeight: 700, border: "none", borderRadius: 10,
@@ -312,6 +320,6 @@ export function StatementsPanel({ statements, ccExpanded, cardConfig, reload }: 
           </div>
         )
       })}
-    </Card>
+    </div>
   )
 }

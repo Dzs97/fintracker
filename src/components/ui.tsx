@@ -131,14 +131,20 @@ interface EntryRowProps {
   isLast?: boolean
 }
 export function EntryRow({ icon, iconBg, name, sub, amount, amtColor, onDel, onEdit, rightExtra, isLast }: EntryRowProps) {
+  const [pressed, setPressed] = React.useState(false)
   return (
     <div
       onClick={onEdit ?? undefined}
+      onPointerDown={() => onEdit && setPressed(true)}
+      onPointerUp={() => setPressed(false)}
+      onPointerLeave={() => setPressed(false)}
       style={{
-        display: "flex", alignItems: "center", gap: 12, padding: "13px 16px",
+        display: "flex", alignItems: "center", gap: 12, padding: "14px 16px",
         borderBottom: isLast ? "none" : `1px solid ${C.border}`,
         cursor: onEdit ? "pointer" : undefined,
         WebkitTapHighlightColor: "transparent",
+        background: pressed ? C.cardHi : "transparent",
+        transition: "background 100ms cubic-bezier(0.4,0,0.2,1)",
       }}>
       <div style={{
         width: 38, height: 38, borderRadius: 11, background: iconBg,
