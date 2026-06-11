@@ -52,6 +52,33 @@ export async function getYahooClose(ticker: string, date: string): Promise<{ pri
   }
 }
 
+/** Daily close series for the last ~6 months. */
+export async function getYahooHistory(ticker: string): Promise<Array<{ date: string; price: number }> | null> {
+  try {
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?range=6mo&interval=1d`
+    const res = await fetch(url, {
+      headers: { "User-Agent": "Mozilla/5.0 (FinTracker)" },
+      next: { revalidate: 3600 },
+    })
+    if (!res.ok) return null
+    const json = await res.json()
+    const result = json?.chart?.result?.[0]
+    const ts: number[] | undefined = result?.timestamp
+    const closes: Array<number | null> | undefined = result?.indicators?.quote?.[0]?.close
+    if (!ts || !closes) return null
+    const out: Array<{ date: string; price: number }> = []
+    for (let i = 0; i < ts.length; i++) {
+      const c = closes[i]
+      if (typeof c === "number") {
+        out.push({ date: new Date(ts[i] * 1000).toISOString().split("T")[0], price: c })
+      }
+    }
+    return out.length ? out : null
+  } catch {
+    return null
+  }
+}
+
 export async function getYahooQuote(ticker: string): Promise<Quote | null> {
   try {
     const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=1d`

@@ -25,6 +25,7 @@ import { BottomNav, type NavTab } from "@/components/BottomNav"
 import { HomeScreen, type HomeNavTarget } from "@/components/HomeScreen"
 import { CardTile } from "@/components/CardTile"
 import { HomeSkeleton, Shimmer } from "@/components/Skeleton"
+import { AssetDetailSheet, type AssetSelection } from "@/components/AssetDetailSheet"
 import type { Expense, Income, CCCharge, Recurring, FutureObligation } from "@/types"
 
 const TABS = [
@@ -64,6 +65,8 @@ export default function Dashboard() {
   const [fxSource, setFxSource] = useState<string | undefined>(undefined)
   // Category filter applied to the Expenses tab (set from Home drill-downs)
   const [catFilter, setCatFilter] = useState<string | null>(null)
+  // Asset drill-down sheet (opened from P&L cards)
+  const [assetDetail, setAssetDetail] = useState<AssetSelection | null>(null)
   const handleHomeNav = (target: HomeNavTarget) => {
     if (typeof target === "string") {
       setCatFilter(null)
@@ -1099,7 +1102,10 @@ export default function Dashboard() {
                     const plPct = cost > 0 && shares > 0 && cur > 0 ? (plMXN / cost * 100) : 0
                     return (
                       <Card key={key} style={{ padding: "14px 16px", marginBottom: 10 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: cur > 0 ? 12 : 0 }}>
+                        <div
+                          onClick={() => setAssetDetail({ name, gf, type: "stock" })}
+                          style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: cur > 0 ? 12 : 0, cursor: "pointer", WebkitTapHighlightColor: "transparent" }}
+                        >
                           <div style={{
                             width: 38, height: 38, borderRadius: 11, background: C.blueDim,
                             display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
@@ -1108,6 +1114,7 @@ export default function Dashboard() {
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontSize: 14, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>
                               {name}<Tag color={gf ? C.purple : C.blue}>{gf ? "GF" : "Mine"}</Tag>
+                              <Icon name="chevR" size={12} color={C.dim} />
                             </div>
                             <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
                               {shares > 0 ? `${shares.toFixed(4)} shares · ` : ""}Cost {fmt(cost)} MXN
@@ -1223,7 +1230,10 @@ export default function Dashboard() {
                       const plPct = coveredCost > 0 && shares > 0 && cur > 0 ? (plMXN / coveredCost * 100) : 0
                       return (
                         <Card key={key} style={{ padding: "14px 16px", marginBottom: 10 }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: cur > 0 ? 12 : 0 }}>
+                          <div
+                            onClick={() => setAssetDetail({ name, gf, type: "fund" })}
+                            style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: cur > 0 ? 12 : 0, cursor: "pointer", WebkitTapHighlightColor: "transparent" }}
+                          >
                             <div style={{
                               width: 38, height: 38, borderRadius: 11, background: C.purpleDim,
                               display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
@@ -1232,6 +1242,7 @@ export default function Dashboard() {
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{ fontSize: 14, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>
                                 {name}<Tag color={gf ? C.pink : C.purple}>{gf ? "GF" : "Mine"}</Tag>
+                                <Icon name="chevR" size={12} color={C.dim} />
                               </div>
                               <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
                                 {shares > 0 ? `${shares.toFixed(4)} shares · ` : ""}Cost {fmt(cost)} MXN
@@ -1360,6 +1371,16 @@ export default function Dashboard() {
       <QuickLogSheet open={quickOpen} onClose={() => setQuickOpen(false)} onLogged={load} />
       {/* Edit sheet — tap any expense / income / CC row */}
       <EditEntrySheet editing={editing} onClose={() => setEditing(null)} onSaved={load} />
+      {/* Asset drill-down — tap a P&L card header */}
+      <AssetDetailSheet
+        asset={assetDetail}
+        buys={assetDetail ? state.investments.filter(i =>
+          i.name === assetDetail.name && i.gf === assetDetail.gf && i.inv_type === assetDetail.type
+        ) : []}
+        currentPrice={assetDetail ? (state.prices?.[assetDetail.name]?.price ?? 0) : 0}
+        fxRate={FX}
+        onClose={() => setAssetDetail(null)}
+      />
 
       {/* Undo toast */}
       {toast && (

@@ -98,6 +98,44 @@ export async function getFintualNavOn(fundName: string, date: string): Promise<{
   return null
 }
 
+/** Daily NAV series for the last ~6 months. */
+export async function getFintualHistory(fundName: string): Promise<Array<{ date: string; price: number }> | null> {
+  const meta = await resolveConceptualId(fundName)
+  if (!meta) return null
+  try {
+    const listRes = await fetch(`https://fintual.com/api/real_assets?conceptual_asset_id=${meta.id}`, { next: { revalidate: 86400 } })
+    if (!listRes.ok) return null
+    const listJson = await listRes.json()
+    const arr = listJson?.data
+    if (!Array.isArray(arr) || arr.length === 0) return null
+    const sorted = [...arr].sort((a, b) =>
+      (b.attributes?.last_day?.date ?? "").localeCompare(a.attributes?.last_day?.date ?? "")
+    )
+    const realId = parseInt(sorted[0].id, 10)
+    const to = new Date()
+    const from = new Date(to.getTime() - 183 * 86400000)
+    const fmtD = (d: Date) => d.toISOString().split("T")[0]
+    const res = await fetch(
+      `https://fintual.com/api/real_assets/${realId}/days?from_date=${fmtD(from)}&to_date=${fmtD(to)}`,
+      { next: { revalidate: 3600 } }
+    )
+    if (!res.ok) return null
+    const json = await res.json()
+    const days = json?.data
+    if (!Array.isArray(days)) return null
+    const out = days
+      .map((d: { attributes?: { date?: string; net_asset_value?: number } }) => ({
+        date: d.attributes?.date ?? "",
+        price: d.attributes?.net_asset_value ?? NaN,
+      }))
+      .filter(d => d.date && isFinite(d.price))
+      .sort((a, b) => a.date.localeCompare(b.date))
+    return out.length ? out : null
+  } catch {
+    return null
+  }
+}
+
 export async function getFintualPrice(fundName: string): Promise<FundQuote | null> {
   const meta = await resolveConceptualId(fundName)
   if (!meta) return null
