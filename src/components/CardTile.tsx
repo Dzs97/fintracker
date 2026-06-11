@@ -46,6 +46,7 @@ interface Props {
 export function CardTile({ card, cfg, pool, currentCycleTotal, statementBalance, statement, onSettle, onPaymentRecorded }: Props) {
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [customAmt, setCustomAmt] = useState("")
   async function payAmount(amount: number) {
     if (!statement || amount <= 0 || busy) return
     if (!confirm(`Record payment of ${fmt(amount)} MXN against ${card} ${statement.period}?\nThis creates a real expense.`)) return
@@ -107,10 +108,19 @@ export function CardTile({ card, cfg, pool, currentCycleTotal, statementBalance,
           </div>
           <div style={{ position: "relative", display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
             <div>
-              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.7)", textTransform: "uppercase", letterSpacing: "0.12em", fontWeight: 700 }}>Owed</div>
-              <div style={{ fontSize: 28, fontWeight: 800, color: "#FFFFFF", letterSpacing: "-0.8px", lineHeight: 1.05, marginTop: 4, fontVariantNumeric: "tabular-nums" }}>
-                {fmt(pool)} <span style={{ fontSize: 12, fontWeight: 500, color: "rgba(255,255,255,0.75)" }}>MXN</span>
+              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.7)", textTransform: "uppercase", letterSpacing: "0.12em", fontWeight: 700 }}>
+                {statement && statement.paid > 0 ? "Remaining" : "Owed"}
               </div>
+              <div style={{ fontSize: 28, fontWeight: 800, color: "#FFFFFF", letterSpacing: "-0.8px", lineHeight: 1.05, marginTop: 4, fontVariantNumeric: "tabular-nums" }}>
+                {/* Statement-aware face: when a statement exists, prefer its remaining
+                    so partial payments visibly reduce the headline number. */}
+                {fmt(statement ? remaining : pool)} <span style={{ fontSize: 12, fontWeight: 500, color: "rgba(255,255,255,0.75)" }}>MXN</span>
+              </div>
+              {statement && statement.paid > 0 && (
+                <div style={{ fontSize: 10.5, color: "rgba(255,255,255,0.7)", marginTop: 3, fontVariantNumeric: "tabular-nums" }}>
+                  paid {fmt(statement.paid)} of {fmt(statement.closingBalance)}
+                </div>
+              )}
             </div>
             {cycle && (
               <div style={{
@@ -164,11 +174,11 @@ export function CardTile({ card, cfg, pool, currentCycleTotal, statementBalance,
                 </div>
               </div>
 
-              {/* Quick-pay buttons */}
+              {/* Payment area */}
               {statement && remaining > 0 && (
                 <div style={{ marginBottom: 12 }}>
                   <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 700, marginBottom: 8 }}>Quick pay</div>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
                     {statement.pagoMinimo != null && statement.pagoMinimo > 0 && (
                       <button onClick={() => payAmount(statement.pagoMinimo!)} disabled={busy} style={quickPayPill(C.muted)}>
                         Mínimo <span style={{ color: C.text, fontWeight: 700, fontVariantNumeric: "tabular-nums", marginLeft: 4 }}>{fmt(statement.pagoMinimo)}</span>
@@ -182,6 +192,45 @@ export function CardTile({ card, cfg, pool, currentCycleTotal, statementBalance,
                         Saldo total <span style={{ color: C.text, fontWeight: 700, fontVariantNumeric: "tabular-nums", marginLeft: 4 }}>{fmt(Math.max(0, statement.totalOwed - statement.paid))}</span>
                       </button>
                     )}
+                  </div>
+
+                  {/* Custom partial-payment input */}
+                  <div style={{ display: "flex", gap: 8, alignItems: "stretch" }}>
+                    <div style={{ flex: 1, display: "flex", alignItems: "center", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 12, paddingLeft: 12 }}>
+                      <span style={{ fontSize: 13, color: C.dim, fontWeight: 600, marginRight: 6 }}>$</span>
+                      <input
+                        type="number" inputMode="decimal" min="0" step="0.01"
+                        value={customAmt}
+                        onChange={e => setCustomAmt(e.target.value)}
+                        placeholder="Custom partial amount"
+                        style={{
+                          flex: 1, minWidth: 0, padding: "11px 12px 11px 0", fontSize: 14,
+                          fontFamily: "inherit", fontVariantNumeric: "tabular-nums",
+                          border: "none", background: "transparent", color: C.text,
+                          outline: "none",
+                        }}
+                      />
+                    </div>
+                    <button
+                      onClick={async () => {
+                        const v = parseFloat(customAmt)
+                        if (!isFinite(v) || v <= 0) return
+                        await payAmount(v)
+                        setCustomAmt("")
+                      }}
+                      disabled={busy || !customAmt || parseFloat(customAmt) <= 0}
+                      style={{
+                        padding: "0 18px", fontSize: 13, fontWeight: 700,
+                        border: "none", borderRadius: 12, cursor: "pointer",
+                        background: !customAmt || parseFloat(customAmt) <= 0 ? C.cardHi : C.green,
+                        color: !customAmt || parseFloat(customAmt) <= 0 ? C.muted : "#0B0D11",
+                        fontFamily: "inherit",
+                        opacity: busy ? 0.5 : 1,
+                      }}
+                    >Pay</button>
+                  </div>
+                  <div style={{ fontSize: 10, color: C.dim, marginTop: 6 }}>
+                    Any partial works — remaining stays on this statement until paid or next cutoff rolls it.
                   </div>
                 </div>
               )}
