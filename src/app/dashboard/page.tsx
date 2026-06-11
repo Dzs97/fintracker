@@ -1051,20 +1051,22 @@ export default function Dashboard() {
 
             {activeInvTab === "pl" && (
               <div style={{ marginBottom: 14 }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, gap: 8 }}>
-                  <div style={{ fontSize: 11, color: C.muted }}>Stocks + funds · set ticker for auto-refresh</div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, gap: 8 }}>
+                  <div style={{ fontSize: 11.5, color: C.muted }}>Stocks + funds · set ticker for auto-refresh</div>
                   <button
                     onClick={refreshPrices}
                     disabled={priceBusy || Object.keys(tickers).length === 0}
                     style={{
-                      padding: "7px 13px", fontSize: 11.5, fontWeight: 700,
-                      border: "none", borderRadius: 10, cursor: "pointer",
-                      background: priceBusy ? C.cardHi : C.blue, color: "#0E0F12",
+                      padding: "6px 12px", fontSize: 11, fontWeight: 700,
+                      border: "none", borderRadius: 100, cursor: "pointer",
+                      background: priceBusy ? C.cardHi : C.blue,
+                      color: priceBusy ? C.muted : "#0B0D11",
                       fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6,
+                      boxShadow: Object.keys(tickers).length === 0 || priceBusy ? "none" : `0 4px 14px ${C.blue}44`,
                       opacity: Object.keys(tickers).length === 0 ? 0.5 : 1,
                     }}
                   >
-                    <Icon name="refresh" size={13} color="#0E0F12" />
+                    <Icon name="refresh" size={12} color={priceBusy ? C.muted : "#0B0D11"} />
                     {priceBusy ? "Refreshing…" : "Refresh prices"}
                   </button>
                 </div>
