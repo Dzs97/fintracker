@@ -20,6 +20,7 @@ export type HomeNavTarget =
 export interface HomeProps {
   moName: string
   onNavigate: (target: HomeNavTarget) => void
+  fxSource?: string
   // hero
   currentCash: number
   totalIncMXN: number
@@ -85,7 +86,7 @@ function AmountDisplay({ value, color, size = 48, suffix }: { value: number; col
 
 export function HomeScreen(props: HomeProps) {
   const {
-    moName, onNavigate, currentCash, totalIncMXN, totalIncUSD, totalExpMXN,
+    moName, onNavigate, fxSource, currentCash, totalIncMXN, totalIncUSD, totalExpMXN,
     monthInvMXN, monthCCTotal, monthExpCount, monthCCCount, monthInvCount,
     ccPoolTotal, ccWarning, cashDelta, fxRate,
     catTotals, catGrand, catPrev,
@@ -154,7 +155,7 @@ export function HomeScreen(props: HomeProps) {
               <div style={{ textAlign: "right" }}>
                 <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 600 }}>FX</div>
                 <div style={{ fontSize: 12.5, color: C.text, marginTop: 2, fontVariantNumeric: "tabular-nums" }}>
-                  ${fxRate.toFixed(2)} <span style={{ fontSize: 9, color: C.dim }}>· live</span>
+                  ${fxRate.toFixed(2)} <span style={{ fontSize: 9, color: C.dim }}>· {fxSource || "live"}</span>
                 </div>
               </div>
               <Icon name="chevR" size={14} color={C.dim} />

@@ -246,6 +246,9 @@ export function MapsEditor({
         </div>
       </Card>
 
+      {/* ── FX rate config ── */}
+      <FxConfigSection reload={reload} smallInp={smallInp} />
+
       {/* ── Recurring entries ── */}
       <RecurringSection recurring={recurring} setRecurring={setRecurring} reload={reload} smallInp={smallInp} />
 
@@ -499,6 +502,97 @@ function ObligationsSection({ obligations, setObligations, reload, smallInp }: {
           }}>Save obligation</button>
         </div>
       )}
+    </Card>
+  )
+}
+
+/* ── FX rate configuration section ──────────────────────────────── */
+function FxConfigSection({ reload, smallInp }: { reload: () => Promise<void>; smallInp: React.CSSProperties }) {
+  const [cfg, setCfg] = useState<{ markupPct: string; fixedRate: string; source: string; rate?: number; baseRate?: number }>({
+    markupPct: "", fixedRate: "", source: "",
+  })
+  // Pull current state once
+  useState(() => {
+    api<{ markupPct?: number; fixedRate?: number; source?: string; rate?: number; baseRate?: number }>("/api/fx", "GET")
+      .then(d => setCfg({
+        markupPct: d.markupPct?.toString() ?? "",
+        fixedRate: d.fixedRate?.toString() ?? "",
+        source:    d.source ?? "",
+        rate:      d.rate,
+        baseRate:  d.baseRate,
+      }))
+      .catch(() => {})
+    return null
+  })
+
+  const save = async () => {
+    const body = {
+      markupPct: cfg.markupPct === "" ? null : parseFloat(cfg.markupPct),
+      fixedRate: cfg.fixedRate === "" ? null : parseFloat(cfg.fixedRate),
+      source:    cfg.source || null,
+    }
+    const out = await api<{ rate: number; baseRate: number; source: string }>("/api/fx", "PUT", body)
+    setCfg({ ...cfg, rate: out.rate, baseRate: out.baseRate, source: out.source })
+    await reload()
+  }
+  const clearOverride = async () => {
+    if (!confirm("Reset to live interbank rate (no markup, no fixed override)?")) return
+    setCfg({ markupPct: "", fixedRate: "", source: "" })
+    const out = await api<{ rate: number; baseRate: number; source: string }>("/api/fx", "PUT", { markupPct: null, fixedRate: null, source: null })
+    setCfg({ markupPct: "", fixedRate: "", source: "", rate: out.rate, baseRate: out.baseRate })
+    await reload()
+  }
+
+  return (
+    <Card style={{ padding: 16, marginBottom: 12 }}>
+      <Label>FX rate</Label>
+      <div style={{ fontSize: 11.5, color: C.dim, marginBottom: 10, lineHeight: 1.5 }}>
+        Default uses live interbank (open.er-api.com). Add a markup % to match a retail provider
+        like DolarApp (~+1.15%) or pin a fixed rate. Source label shows on the Home hero.
+      </div>
+      {cfg.baseRate != null && (
+        <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+          <div style={{ flex: 1, background: C.bg, borderRadius: 10, padding: "8px 10px" }}>
+            <div style={{ fontSize: 9.5, color: C.muted, letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600 }}>Interbank</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginTop: 3, fontVariantNumeric: "tabular-nums" }}>{cfg.baseRate.toFixed(4)}</div>
+          </div>
+          <div style={{ flex: 1, background: C.bg, borderRadius: 10, padding: "8px 10px" }}>
+            <div style={{ fontSize: 9.5, color: C.muted, letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600 }}>App uses</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: C.green, marginTop: 3, fontVariantNumeric: "tabular-nums" }}>{cfg.rate?.toFixed(4)}</div>
+            {cfg.rate && cfg.baseRate && Math.abs(cfg.rate - cfg.baseRate) > 0.0001 && (
+              <div style={{ fontSize: 9, color: C.dim, marginTop: 1 }}>
+                {cfg.rate > cfg.baseRate ? "+" : ""}{(cfg.rate - cfg.baseRate).toFixed(4)} ({((cfg.rate - cfg.baseRate) / cfg.baseRate * 100).toFixed(2)}%)
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      <label style={lbl}>Markup % over interbank</label>
+      <input style={inp} type="number" step="0.01" value={cfg.markupPct}
+        onChange={e => setCfg({ ...cfg, markupPct: e.target.value })}
+        placeholder="e.g. 1.15 for DolarApp" />
+      <label style={lbl}>Fixed rate (overrides markup)</label>
+      <input style={inp} type="number" step="0.0001" value={cfg.fixedRate}
+        onChange={e => setCfg({ ...cfg, fixedRate: e.target.value })}
+        placeholder="e.g. 17.65" />
+      <label style={lbl}>Source label</label>
+      <input style={inp} value={cfg.source}
+        onChange={e => setCfg({ ...cfg, source: e.target.value })}
+        placeholder="DolarApp, Banxico FIX, etc." />
+      <div style={{ display: "flex", gap: 6 }}>
+        <button onClick={clearOverride} style={{
+          padding: "9px 14px", fontSize: 12, fontWeight: 600, border: `1px solid ${C.border}`, borderRadius: 10,
+          cursor: "pointer", background: "transparent", color: C.muted, fontFamily: "inherit",
+        }}>Reset</button>
+        <div style={{ flex: 1 }} />
+        <button onClick={save} style={{
+          padding: "9px 16px", fontSize: 12, fontWeight: 700, border: "none", borderRadius: 10,
+          cursor: "pointer", background: C.green, color: "#0B0D11", fontFamily: "inherit",
+        }}>Save</button>
+      </div>
+      <div style={{ fontSize: 10, color: C.dim, marginTop: 8 }}>
+        Tip: leave both empty → app uses pure interbank. Use just markup to track DolarApp/Wise dynamically as interbank moves.
+      </div>
     </Card>
   )
 }

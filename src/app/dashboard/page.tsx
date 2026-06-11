@@ -61,6 +61,7 @@ export default function Dashboard() {
   const [cardConfig, setCardConfig] = useState<Record<string, CardConfig>>({})
   const [recurring, setRecurring] = useState<Recurring[]>([])
   const [obligations, setObligations] = useState<FutureObligation[]>([])
+  const [fxSource, setFxSource] = useState<string | undefined>(undefined)
   // Category filter applied to the Expenses tab (set from Home drill-downs)
   const [catFilter, setCatFilter] = useState<string | null>(null)
   const handleHomeNav = (target: HomeNavTarget) => {
@@ -116,7 +117,7 @@ export default function Dashboard() {
         api<{ cc: AppState["cc"]; settled: AppState["settled"] }>("/api/cc"),
         api<{ investments: AppState["investments"]; prices: AppState["prices"] }>("/api/investments"),
         api<{ budgets: AppState["budgets"] }>("/api/budgets"),
-        api<{ rate: number }>("/api/fx"),
+        api<{ rate: number; source?: string }>("/api/fx"),
         api<{ tickers: Record<string, string> }>("/api/prices"),
         api<{ funds: Record<string, string> }>("/api/funds"),
         api<{ splits: typeof splits }>("/api/splits"),
@@ -130,6 +131,7 @@ export default function Dashboard() {
       setCardConfig(cfgData.config ?? {})
       setRecurring(recData.recurring ?? [])
       setObligations(obData.obligations ?? [])
+      setFxSource(fx.source)
       setState({
         expenses: entries.expenses, income: entries.income,
         cc: ccData.cc, settled: ccData.settled,
@@ -531,6 +533,7 @@ export default function Dashboard() {
           <HomeScreen
             moName={moName}
             onNavigate={handleHomeNav}
+            fxSource={fxSource}
             currentCash={currentCash}
             totalIncMXN={totalIncMXN} totalIncUSD={totalIncUSD}
             totalExpMXN={totalExpMXN}

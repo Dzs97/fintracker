@@ -40,4 +40,8 @@ export const KEYS = {
   oblLastDec:  "ft:obligationsLastDec",  // Record<card, "YYYY-MM"> — last cycle period for which
                                          //   each card's obligations were auto-decremented.
                                          //   Prevents the daily cron from over-decrementing.
+  fxConfig:    "ft:fxConfig",            // { markupPct?: number, fixedRate?: number, source?: string }
+                                         //   override the live interbank rate. fixedRate wins; else
+                                         //   adjusted = liveRate * (1 + markupPct/100). source is a
+                                         //   freeform label shown in the hero ('DolarApp', 'Banxico'…)
 }
