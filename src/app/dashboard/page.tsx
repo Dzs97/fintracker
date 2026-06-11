@@ -20,6 +20,9 @@ import { computeCycle, partitionByCycle, fmtDueLabel, type CardConfig } from "@/
 import { StatementsPanel } from "@/components/StatementsPanel"
 import { QuickLogSheet } from "@/components/QuickLogSheet"
 import { EditEntrySheet } from "@/components/EditEntrySheet"
+import { TopBar } from "@/components/TopBar"
+import { BottomNav, type NavTab } from "@/components/BottomNav"
+import { HomeScreen } from "@/components/HomeScreen"
 import type { Expense, Income, CCCharge, Recurring, FutureObligation } from "@/types"
 
 const TABS = [
@@ -482,272 +485,49 @@ export default function Dashboard() {
       background: C.bg, color: C.text, minHeight: "100vh",
       display: "flex", flexDirection: "column",
     }}>
-      {/* ── Tab bar ── */}
-      <div style={{
-        display: "flex", background: C.surface,
-        borderBottom: `1px solid ${C.border}`, alignItems: "stretch", flexShrink: 0,
-        position: "sticky", top: 0, zIndex: 10,
-      }}>
-        {TABS.map(t => {
-          const on = tab === t.id
-          const iconName = t.id === "Investments" ? "invest" : t.id.toLowerCase()
-          return (
-            <button key={t.id} onClick={() => setTab(t.id)} style={{
-              flex: 1, padding: "11px 2px 9px", cursor: "pointer",
-              border: "none",
-              borderBottom: `2px solid ${on ? C.green : "transparent"}`,
-              background: "transparent",
-              display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
-              transition: "color .15s",
-            }}>
-              <Icon name={iconName} size={20} color={on ? C.green : C.muted} fill={t.id === "Overview"} />
-              <span style={{ fontSize: 9.5, fontWeight: on ? 700 : 500, color: on ? C.green : C.muted, letterSpacing: "0.02em" }}>{t.label}</span>
-            </button>
-          )
-        })}
-        <button onClick={() => setQuickOpen(true)} title="Quick log" style={{
-          padding: "0 13px", border: "none", borderLeft: `1px solid ${C.border}`,
-          background: "transparent", color: C.green, cursor: "pointer",
-          flexShrink: 0, display: "flex", alignItems: "center", gap: 4,
-        }}>
-          <Icon name="plus" size={18} color={C.green} />
-        </button>
-        <button onClick={doRefresh} title="Refresh" style={{
-          padding: "0 13px", border: "none", borderLeft: `1px solid ${C.border}`,
-          background: "transparent", color: refreshing ? C.green : C.muted, cursor: "pointer",
-          flexShrink: 0, transition: "transform .5s, color .3s",
-          transform: refreshing ? "rotate(-180deg)" : "rotate(0deg)",
-          display: "flex", alignItems: "center",
-        }}>
-          <Icon name="refresh" size={18} color={refreshing ? C.green : C.muted} />
-        </button>
-      </div>
+      {/* ── Top bar: greeting + month + quick actions ── */}
+      <TopBar
+        name="Diego"
+        moName={moName} vy={vy}
+        onPrev={() => shiftMonth(-1)}
+        onNext={() => shiftMonth(1)}
+        atCurrent={isCurrentMonth()}
+        onQuickLog={() => setQuickOpen(true)}
+        onRefresh={doRefresh}
+        refreshing={refreshing}
+      />
 
-      <div style={{ flex: 1, overflow: "auto", WebkitOverflowScrolling: "touch" }}>
+      <div style={{ flex: 1, overflow: "auto", WebkitOverflowScrolling: "touch", paddingBottom: 90 }}>
 
         {/* ══ OVERVIEW ══ */}
         {tab === "Overview" && (
-          <div style={PAD}>
-            <MonthNav moName={moName} vy={vy} onPrev={() => shiftMonth(-1)} onNext={() => shiftMonth(1)} atCurrent={isCurrentMonth()} />
-
-            {ccWarning && (
-              <div style={{
-                background: C.amberDim, border: `1px solid ${C.amber}55`, borderRadius: 14,
-                padding: "12px 16px", marginBottom: 14, display: "flex", alignItems: "center", gap: 12,
-              }}>
-                <Icon name="warning" size={20} color={C.amber} />
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: C.amber }}>Card pool is high</div>
-                  <div style={{ fontSize: 11.5, color: C.muted, marginTop: 2 }}>Unpaid cards ({fmt(ccPoolTotal)}) exceed 80% of cash</div>
-                </div>
-              </div>
-            )}
-
-            {/* Hero */}
-            <Card glow={currentCash >= 0 ? C.green : C.red} style={{
-              background: heroFlash ? C.greenDim : C.card,
-              borderColor: heroFlash ? C.green : C.border,
-              padding: "22px 20px", marginBottom: 14, transition: "background .3s, border-color .3s",
-            }}>
-              <div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10, fontWeight: 600 }}>{moName} · Current cash</div>
-              <div style={{ fontSize: 42, fontWeight: 700, letterSpacing: "-1.5px", color: currentCash >= 0 ? C.green : C.red, lineHeight: 1 }}>
-                {fmt(Math.abs(currentCash))}
-                <span style={{ fontSize: 16, fontWeight: 500, color: C.muted, marginLeft: 7 }}>MXN</span>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
-                <div style={{ fontSize: 12, color: C.muted }}>Income − expenses − investments</div>
-                {cashDelta !== null && (
-                  <span style={{ fontSize: 11, fontWeight: 700, color: deltaColor, background: deltaColor + "22", padding: "2px 9px", borderRadius: 20 }}>{deltaLabel}</span>
-                )}
-              </div>
-              <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontSize: 11.5, color: C.muted }}>CC pool (unpaid)</span>
-                <span style={{ fontSize: 13.5, fontWeight: 700, color: ccWarning ? C.amber : C.text }}>{fmt(ccPoolTotal)} MXN</span>
-              </div>
-              <div style={{ fontSize: 10.5, color: C.dim, marginTop: 7 }}>1 USD = ${FX.toFixed(2)} MXN · live</div>
-            </Card>
-
-            {/* Stat grid */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
-              {[
-                { label: "Income",   val: fmt(totalIncMXN),  sub: fmt(totalIncUSD) + " USD", color: C.green },
-                { label: "Spent",    val: fmt(totalExpMXN),  sub: monthExp.length + " items", color: C.red },
-                { label: "Cards",    val: fmt(monthCCTotal), sub: monthCC.length + " charge" + (monthCC.length !== 1 ? "s" : ""), color: C.amber },
-                { label: "Invested", val: fmt(monthInvMXN),  sub: monthInv.length + " buy" + (monthInv.length !== 1 ? "s" : ""), color: C.blue },
-              ].map(m => (
-                <div key={m.label} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: "13px 14px" }}>
-                  <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 7, fontWeight: 600 }}>{m.label}</div>
-                  <div style={{ fontSize: 18, fontWeight: 700, color: m.color, letterSpacing: "-0.4px" }}>{m.val}</div>
-                  <div style={{ fontSize: 10.5, color: C.dim, marginTop: 3 }}>{m.sub}</div>
-                </div>
-              ))}
-            </div>
-
-            {/* Spending breakdown */}
-            {Object.keys(catTotals).length > 0 && (
-              <Card style={{ padding: 16, marginBottom: 14 }}>
-                <Label>Spending — direct + cards</Label>
-                <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
-                  <Donut data={Object.entries(catTotals).map(([k, v]) => ({ label: k, v, color: CAT_COLORS[k] ?? C.muted }))} size={112} />
-                  <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 9, minWidth: 0 }}>
-                    {Object.entries(catTotals).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([cat, amt]) => {
-                      const pct = Math.round(amt / catGrand * 100)
-                      const prev = catPrev[cat] ?? 0
-                      const delta = prev === 0 ? null : ((amt - prev) / prev) * 100
-                      const dColor = delta === null ? C.dim : delta >= 0 ? C.red : C.green   // spending up = red
-                      return (
-                        <div key={cat}>
-                          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                            <span style={{ fontSize: 11.5, color: C.text, display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
-                              <span style={{ width: 7, height: 7, borderRadius: "50%", background: CAT_COLORS[cat] ?? C.muted, flexShrink: 0 }} />
-                              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cat}</span>
-                            </span>
-                            <span style={{ fontSize: 11.5, color: C.muted, flexShrink: 0, marginLeft: 8, display: "inline-flex", alignItems: "center", gap: 6 }}>
-                              {delta !== null && (
-                                <span style={{ fontSize: 9.5, color: dColor, fontWeight: 700 }}>
-                                  {delta >= 0 ? "↑" : "↓"}{Math.abs(delta).toFixed(0)}%
-                                </span>
-                              )}
-                              <span>{pct}%</span>
-                            </span>
-                          </div>
-                          <div style={{ background: C.border, borderRadius: 20, height: 4, overflow: "hidden" }}>
-                            <div style={{ width: pct + "%", height: "100%", borderRadius: 20, background: CAT_COLORS[cat] ?? C.muted, transition: "width .4s" }} />
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              </Card>
-            )}
-
-            {/* Per-category 6-month trend (top 5 by current-month spend) */}
-            {Object.keys(catTotals).length > 0 && (
-              <Card style={{ padding: 16, marginBottom: 14 }}>
-                <Label>Trends · last 6 mo</Label>
-                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                  {Object.entries(catTotals).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([cat]) => {
-                    const series = catSeries[cat] ?? Array(6).fill(0)
-                    const max = Math.max(...series, 1)
-                    return (
-                      <div key={cat} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <span style={{ fontSize: 11.5, color: C.text, display: "inline-flex", alignItems: "center", gap: 6, flexShrink: 0, width: 110 }}>
-                          <span style={{ width: 7, height: 7, borderRadius: "50%", background: CAT_COLORS[cat] ?? C.muted }} />
-                          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cat}</span>
-                        </span>
-                        <svg viewBox="0 0 120 28" style={{ flex: 1, height: 28, display: "block" }}>
-                          {series.map((v, i) => {
-                            const bw = 14, gap = 4
-                            const x = i * (bw + gap)
-                            const h = Math.max(2, (v / max) * 24)
-                            return <rect key={i} x={x} y={28 - h} width={bw} height={h} rx={2} fill={CAT_COLORS[cat] ?? C.muted} opacity={0.85} />
-                          })}
-                        </svg>
-                        <span style={{ fontSize: 11, color: C.muted, flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{fmt(series[series.length - 1])}</span>
-                      </div>
-                    )
-                  })}
-                </div>
-                <div style={{ fontSize: 9, color: C.dim, marginTop: 8, display: "flex", justifyContent: "space-between", marginLeft: 120 }}>
-                  {last6.map(p => <span key={p.label}>{p.label}</span>)}
-                </div>
-              </Card>
-            )}
-
-            {/* Net worth = (income − expenses) + (investment_value − investment_cost) */}
-            {(() => {
-              const savedLatest = netWorthLine[netWorthLine.length - 1].v
-              const netWorth = savedLatest + investmentPL
-              return (
-                <Card style={{ padding: 16, marginBottom: 14 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 10 }}>
-                    <Label style={{ marginBottom: 0 }}>Net worth · 6 mo</Label>
-                    <div style={{ textAlign: "right" }}>
-                      <div style={{ fontSize: 19, fontWeight: 700, color: netWorth >= 0 ? C.green : C.red, letterSpacing: "-0.4px" }}>
-                        {fmt(netWorth)}
-                        <span style={{ fontSize: 10, color: C.muted, fontWeight: 500, marginLeft: 5 }}>MXN</span>
-                      </div>
-                      <div style={{ fontSize: 10, color: C.dim, marginTop: 2 }}>
-                        saved {fmt(savedLatest)}
-                        <span style={{ color: investmentPL >= 0 ? C.green : C.red, marginLeft: 4 }}>
-                          {investmentPL >= 0 ? " +" : " "}{fmt(investmentPL)} P&L
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  <LineChart points={netWorthLine} color={C.green} height={86} />
-                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
-                    {last6.map(p => <span key={p.label} style={{ fontSize: 9, color: C.dim }}>{p.label}</span>)}
-                  </div>
-                  <div style={{ fontSize: 10, color: C.dim, marginTop: 6, textAlign: "center" }}>
-                    Line: cumulative (income − expenses). Investment P&L is the live delta on top.
-                  </div>
-                </Card>
-              )
-            })()}
-
-            {/* Mini charts */}
-            <Card style={{ padding: 16, marginBottom: 14 }}>
-              <Label>Income — last 6 months (MXN)</Label>
-              <SparkBar data={incByMonth} color={C.green} />
-              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8 }}>
-                {last6.map(p => <span key={p.label} style={{ fontSize: 9, color: C.dim }}>{p.label}</span>)}
-              </div>
-            </Card>
-            <Card style={{ padding: 16, marginBottom: 14 }}>
-              <Label>Total spending — last 6 months</Label>
-              <SparkBar data={expByMonth} color={C.red} />
-              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8 }}>
-                {last6.map(p => <span key={p.label} style={{ fontSize: 9, color: C.dim }}>{p.label}</span>)}
-              </div>
-            </Card>
-
-            {/* Quick add */}
-            {quickAdd && (
-              <div style={{ marginBottom: 8 }}>
-                {quickAdd === "expense"    && expenseForm()}
-                {quickAdd === "income"     && incomeForm()}
-                {quickAdd === "cc"         && ccForm()}
-                {quickAdd === "investment" && invForm()}
-              </div>
-            )}
-            <div style={{ position: "sticky", bottom: 14, display: "flex", justifyContent: "flex-end", marginTop: 8, pointerEvents: "none" }}>
-              {quickAdd ? (
-                <button onClick={() => setQuickAdd(null)} style={{
-                  pointerEvents: "all", display: "inline-flex", alignItems: "center", gap: 7,
-                  padding: "13px 22px", fontSize: 14, fontFamily: "inherit", fontWeight: 700,
-                  borderRadius: 100, cursor: "pointer", background: C.surface, color: C.muted,
-                  border: `1px solid ${C.border}`,
-                }}>
-                  <Icon name="close" size={16} color={C.muted} />Close
-                </button>
-              ) : (
-                <div style={{ pointerEvents: "all", display: "flex", gap: 8 }}>
-                  {([
-                    { t: "expense" as const,    i: "expenses", c: C.red },
-                    { t: "income" as const,     i: "income",   c: C.green },
-                    { t: "cc" as const,         i: "cards",    c: C.amber },
-                    { t: "investment" as const, i: "invest",   c: C.blue },
-                  ]).map(b => (
-                    <button key={b.t} onClick={() => setQuickAdd(b.t)} style={{
-                      width: 48, height: 48, display: "flex", alignItems: "center", justifyContent: "center",
-                      borderRadius: 100, cursor: "pointer", background: b.c + "1F", color: b.c,
-                      border: `1px solid ${b.c}44`,
-                    }}>
-                      <Icon name={b.i} size={20} color={b.c} />
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
+          <HomeScreen
+            moName={moName}
+            currentCash={currentCash}
+            totalIncMXN={totalIncMXN} totalIncUSD={totalIncUSD}
+            totalExpMXN={totalExpMXN}
+            monthInvMXN={monthInvMXN}
+            monthCCTotal={monthCCTotal}
+            monthExpCount={monthExp.length}
+            monthCCCount={monthCC.length}
+            monthInvCount={monthInv.length}
+            ccPoolTotal={ccPoolTotal}
+            ccWarning={ccWarning}
+            cashDelta={cashDelta}
+            fxRate={FX}
+            catTotals={catTotals} catGrand={catGrand} catPrev={catPrev}
+            netWorthLine={netWorthLine}
+            liveInvestmentValue={investmentValue}
+            investmentCost={investmentCost}
+            catSeries={catSeries}
+            last6Labels={last6.map(p => p.label)}
+          />
         )}
+
 
         {/* ══ CARDS ══ */}
         {tab === "Cards" && (
           <div style={PAD}>
-            <MonthNav moName={moName} vy={vy} onPrev={() => shiftMonth(-1)} onNext={() => shiftMonth(1)} atCurrent={isCurrentMonth()} />
 
             <Card glow={C.amber} style={{ padding: 20, marginBottom: 14 }}>
               <div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8, fontWeight: 600 }}>Total unpaid pool</div>
@@ -994,7 +774,11 @@ export default function Dashboard() {
         {/* ══ EXPENSES ══ */}
         {tab === "Expenses" && (
           <div style={PAD}>
-            <MonthNav moName={moName} vy={vy} onPrev={() => shiftMonth(-1)} onNext={() => shiftMonth(1)} atCurrent={isCurrentMonth()} />
+            <ToggleRow
+              value="expenses"
+              onChange={v => setTab(v === "income" ? "Income" : "Expenses")}
+              options={[{ value: "expenses", label: "Expenses" }, { value: "income", label: "Income" }]}
+            />
             {showForm && expenseForm()}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: "13px 16px", marginBottom: 14 }}>
               <span style={{ fontSize: 12, color: C.muted }}>{moName} total</span>
@@ -1043,7 +827,11 @@ export default function Dashboard() {
         {/* ══ INCOME ══ */}
         {tab === "Income" && (
           <div style={PAD}>
-            <MonthNav moName={moName} vy={vy} onPrev={() => shiftMonth(-1)} onNext={() => shiftMonth(1)} atCurrent={isCurrentMonth()} />
+            <ToggleRow
+              value="income"
+              onChange={v => setTab(v === "income" ? "Income" : "Expenses")}
+              options={[{ value: "expenses", label: "Expenses" }, { value: "income", label: "Income" }]}
+            />
             {showForm && incomeForm()}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: "13px 16px", marginBottom: 14 }}>
               <span style={{ fontSize: 12, color: C.muted }}>{moName} total</span>
@@ -1461,6 +1249,22 @@ export default function Dashboard() {
         )}
 
       </div>
+
+      {/* Bottom navigation */}
+      <BottomNav
+        active={
+          tab === "Overview" ? "Home" :
+          (tab === "Expenses" || tab === "Income") ? "Money" :
+          tab === "Cards" ? "Cards" : "Invest"
+        }
+        onChange={(nt: NavTab) => {
+          if (nt === "Home") setTab("Overview")
+          else if (nt === "Money") setTab(tab === "Income" ? "Income" : "Expenses")
+          else if (nt === "Cards") setTab("Cards")
+          else if (nt === "Invest") setTab("Investments")
+        }}
+        onCenterAction={() => setQuickOpen(true)}
+      />
 
       {/* Global quick-log sheet */}
       <QuickLogSheet open={quickOpen} onClose={() => setQuickOpen(false)} onLogged={load} />

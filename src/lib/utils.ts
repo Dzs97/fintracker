@@ -6,27 +6,54 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-/* ── Design tokens (mirror of app/theme.js from the handoff) ──────── */
+/* ── Design tokens — v2 (fintech bright, dark mode) ──────────────────
+ * Punchier surfaces, brighter accents, gradient-ready hero treatments.
+ * Old token names are kept as aliases for back-compat while we migrate.
+ */
 export const C = {
-  bg:       "#0E0F12",
-  surface:  "#16181C",
-  card:     "#1C1E23",
-  cardHi:   "#232529",
-  border:   "#2A2C32",
-  borderHi: "#34373E",
+  // Surfaces — deeper black + lifted cards for more contrast
+  bg:       "#0B0D11",
+  surface:  "#15181F",
+  card:     "#1A1D26",
+  cardHi:   "#22262F",
+  cardSoft: "#15181F",
+  elevated: "#1F2230",  // for hero cards
+  border:   "#2A2E3B",  // more visible than before
+  borderHi: "#3A3F50",
 
-  text:    "#F2F2F5",
+  // Text scale
+  text:    "#F2F4F8",
   strong:  "#FFFFFF",
-  muted:   "#8E8F95",
-  dim:     "#5B5D62",
+  muted:   "#8A8D99",
+  dim:     "#52555F",
 
-  green:     "#04D77F", greenSoft: "#6AE8AF", greenDim: "#0C2A20",
-  red:       "#FF5B6B", redDim:   "#2A1014",
-  blue:      "#47CBFF", blueDim:  "#0C1E2A",
-  amber:     "#FF9D68", amberDim: "#2A180F",
-  purple:    "#A996FF", purpleDim:"#181230",
-  teal:      "#5BD1B0", tealDim:  "#0C2420",
-  pink:      "#EF7D98", pinkDim:  "#2A1018",
+  // Brand + status accents (more saturated)
+  green:     "#04D77F", greenSoft: "#6AE8AF", greenDim: "#0E2A1E",
+  red:       "#FF5B6B", redDim:    "#2A1018",
+  blue:      "#47CBFF", blueDim:   "#0E2034",
+  amber:     "#FF9D68", amberDim:  "#2A1A10",
+  purple:    "#7B61FF", purpleDim: "#1A1530",
+  pink:      "#FF6BAA", pinkDim:   "#2A1020",
+  teal:      "#5BD1B0", tealDim:   "#0E2624",
+} as const
+
+/* ── Gradients ───────────────────────────────────────────────────── */
+export const G = {
+  hero:    "linear-gradient(135deg, #7B61FF 0%, #FF6BAA 100%)",
+  income:  "linear-gradient(135deg, #04D77F 0%, #47CBFF 100%)",
+  spent:   "linear-gradient(135deg, #FF5B6B 0%, #FF9D68 100%)",
+  invest:  "linear-gradient(135deg, #47CBFF 0%, #7B61FF 100%)",
+  cards:   "linear-gradient(135deg, #FF9D68 0%, #FF6BAA 100%)",
+  card:    "linear-gradient(180deg, #1F2230 0%, #15181F 100%)",  // subtle vertical
+} as const
+
+/* ── Motion ──────────────────────────────────────────────────────── */
+export const M = {
+  fast:  150,
+  base:  250,
+  slow:  400,
+  ease:  "cubic-bezier(0.4, 0, 0.2, 1)",
+  spring: "cubic-bezier(0.34, 1.56, 0.64, 1)",
 } as const
 
 // Fallback only — runtime should always use state.fxRate from /api/fx
