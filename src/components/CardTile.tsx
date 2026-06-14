@@ -1,7 +1,6 @@
 "use client"
 import { useState } from "react"
 import { C, G, fmt, fmtDate, buzz } from "@/lib/utils"
-import { Icon } from "./Icon"
 import { computeCycle, fmtDueLabel, type CardConfig } from "@/lib/cardCycles"
 import type { Statement } from "@/types"
 
@@ -25,11 +24,50 @@ async function recordPayment(statementId: string, amount: number) {
   return res.json()
 }
 
-/** Brand gradients — each card gets a distinct color signature. */
-const CARD_GRADIENTS: Record<string, string> = {
-  OpenBank: "linear-gradient(135deg, #04D77F 0%, #47CBFF 100%)",
-  Amex:     "linear-gradient(135deg, #7B61FF 0%, #04D77F 100%)",
-  Invex:    "linear-gradient(135deg, #FF6BAA 0%, #FF9D68 100%)",
+/** Card face styling modeled on the real products.
+ *  ink/subink/chipBg adapt for light (gold) vs dark faces so text stays legible. */
+interface CardStyle {
+  gradient: string
+  product: string       // sub-label under the bank name
+  network: string       // bottom-right network mark
+  ink: string           // primary text
+  subink: string        // secondary text
+  chipBg: string        // translucent chip background
+  shine: string         // radial shine overlay
+}
+const CARD_STYLES: Record<string, CardStyle> = {
+  // Openbank — matte black with the brand orange glow
+  OpenBank: {
+    gradient: "linear-gradient(135deg, #1C1C1E 0%, #2A2A2E 55%, #FF5A00 160%)",
+    product: "Openbank · sin anualidad",
+    network: "Mastercard",
+    ink: "#FFFFFF", subink: "rgba(255,255,255,0.62)",
+    chipBg: "rgba(0,0,0,0.30)",
+    shine: "radial-gradient(circle, rgba(255,90,0,0.28) 0%, transparent 55%)",
+  },
+  // Amex Aeroméxico — The Gold Card, champagne metal
+  Amex: {
+    gradient: "linear-gradient(135deg, #9C7A2E 0%, #E8CD7E 45%, #C9A24B 70%, #8A6A22 100%)",
+    product: "Gold · Aeroméxico",
+    network: "AMEX",
+    ink: "#2A1F08", subink: "rgba(42,31,8,0.62)",
+    chipBg: "rgba(255,255,255,0.28)",
+    shine: "radial-gradient(circle, rgba(255,255,255,0.45) 0%, transparent 55%)",
+  },
+  // Volaris INVEX 2.0 Platino — Volaris magenta into deep purple
+  Invex: {
+    gradient: "linear-gradient(135deg, #6A1B9A 0%, #A21CAF 45%, #E5007E 100%)",
+    product: "Volaris 2.0 · Platino",
+    network: "Mastercard",
+    ink: "#FFFFFF", subink: "rgba(255,255,255,0.66)",
+    chipBg: "rgba(0,0,0,0.22)",
+    shine: "radial-gradient(circle, rgba(255,255,255,0.30) 0%, transparent 55%)",
+  },
+}
+const DEFAULT_STYLE: CardStyle = {
+  gradient: G.invest, product: "", network: "", ink: "#FFFFFF",
+  subink: "rgba(255,255,255,0.62)", chipBg: "rgba(0,0,0,0.25)",
+  shine: "radial-gradient(circle, rgba(255,255,255,0.18) 0%, transparent 50%)",
 }
 
 interface Props {
@@ -55,11 +93,11 @@ export function CardTile({ card, cfg, pool, currentCycleTotal, statementBalance,
     try { await recordPayment(statement.id, amount); await onPaymentRecorded() }
     finally { setBusy(false) }
   }
-  const grad = CARD_GRADIENTS[card] ?? G.invest
+  const s = CARD_STYLES[card] ?? DEFAULT_STYLE
   const cycle = cfg ? computeCycle(cfg) : null
   const overdue = cycle ? cycle.overdue && statementBalance > 0 : false
   const urgent = cycle ? cycle.daysUntilDue <= 3 && statementBalance > 0 : false
-  const cardLast4 = card === "OpenBank" ? "7191" : card === "Amex" ? "3003" : "··"
+  const cardLast4 = card === "OpenBank" ? "8433" : card === "Amex" ? "3003" : card === "Invex" ? "7191" : "··"
   const remaining = statement ? Math.max(0, statement.closingBalance - statement.paid) : statementBalance
 
   return (
@@ -79,67 +117,81 @@ export function CardTile({ card, cfg, pool, currentCycleTotal, statementBalance,
         }}
       >
         <div style={{
-          background: grad, position: "relative", overflow: "hidden",
-          padding: "18px 18px 16px",
+          background: s.gradient, position: "relative", overflow: "hidden",
+          padding: "18px 18px 16px", minHeight: 168,
+          display: "flex", flexDirection: "column", justifyContent: "space-between",
         }}>
           {/* Decorative shine arc */}
           <div style={{
             position: "absolute", top: "-50%", right: "-30%",
             width: "120%", height: "200%",
-            background: "radial-gradient(circle, rgba(255,255,255,0.18) 0%, transparent 50%)",
-            pointerEvents: "none",
+            background: s.shine, pointerEvents: "none",
           }} />
-          <div style={{ position: "relative", display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 22 }}>
+          {/* EMV chip */}
+          <div style={{
+            position: "absolute", top: 56, left: 18,
+            width: 34, height: 26, borderRadius: 5,
+            background: "linear-gradient(135deg, #E6C988 0%, #B8923F 50%, #E6C988 100%)",
+            boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.15)",
+          }}>
+            <div style={{ position: "absolute", inset: "6px 0", borderTop: "1px solid rgba(0,0,0,0.2)", borderBottom: "1px solid rgba(0,0,0,0.2)" }} />
+          </div>
+
+          <div style={{ position: "relative", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div>
-              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.7)", textTransform: "uppercase", letterSpacing: "0.16em", fontWeight: 700 }}>
+              <div style={{ fontSize: 12, color: s.ink, letterSpacing: "0.02em", fontWeight: 800 }}>
                 {card}
               </div>
-              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.55)", marginTop: 4, letterSpacing: "0.1em" }}>
-                •••• {cardLast4}
+              <div style={{ fontSize: 9.5, color: s.subink, marginTop: 2, letterSpacing: "0.04em", fontWeight: 600 }}>
+                {s.product}
               </div>
             </div>
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
-              <Icon name="cards" size={20} color="rgba(255,255,255,0.9)" />
-              <span style={{
-                padding: "3px 9px", fontSize: 9.5, fontWeight: 700,
-                background: "rgba(0,0,0,0.25)", color: "#FFFFFF",
-                borderRadius: 100, backdropFilter: "blur(8px)",
-              }}>{open ? "Close" : "Tap to open"}</span>
-            </div>
+            <span style={{
+              padding: "3px 9px", fontSize: 9.5, fontWeight: 700,
+              background: s.chipBg, color: s.ink,
+              borderRadius: 100, backdropFilter: "blur(8px)",
+            }}>{open ? "Close" : "Tap to open"}</span>
           </div>
+
           <div style={{ position: "relative", display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
             <div>
-              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.7)", textTransform: "uppercase", letterSpacing: "0.12em", fontWeight: 700 }}>
+              <div style={{ fontSize: 10, color: s.subink, textTransform: "uppercase", letterSpacing: "0.12em", fontWeight: 700 }}>
                 {statement && statement.paid > 0 ? "Remaining" : "Owed"}
               </div>
-              <div style={{ fontSize: 28, fontWeight: 800, color: "#FFFFFF", letterSpacing: "-0.8px", lineHeight: 1.05, marginTop: 4, fontVariantNumeric: "tabular-nums" }}>
-                {/* Statement-aware face: when a statement exists, prefer its remaining
-                    so partial payments visibly reduce the headline number. */}
-                {fmt(statement ? remaining : pool)} <span style={{ fontSize: 12, fontWeight: 500, color: "rgba(255,255,255,0.75)" }}>MXN</span>
+              <div style={{ fontSize: 27, fontWeight: 800, color: s.ink, letterSpacing: "-0.8px", lineHeight: 1.05, marginTop: 4, fontVariantNumeric: "tabular-nums" }}>
+                {fmt(statement ? remaining : pool)} <span style={{ fontSize: 12, fontWeight: 500, color: s.subink }}>MXN</span>
+              </div>
+              <div style={{ fontSize: 10.5, color: s.subink, marginTop: 5, letterSpacing: "0.14em", fontWeight: 600 }}>
+                ••••&nbsp;&nbsp;{cardLast4}
               </div>
               {statement && statement.paid > 0 && (
-                <div style={{ fontSize: 10.5, color: "rgba(255,255,255,0.7)", marginTop: 3, fontVariantNumeric: "tabular-nums" }}>
+                <div style={{ fontSize: 10, color: s.subink, marginTop: 3, fontVariantNumeric: "tabular-nums" }}>
                   paid {fmt(statement.paid)} of {fmt(statement.closingBalance)}
                 </div>
               )}
             </div>
-            {cycle && (
-              <div style={{
-                background: "rgba(0,0,0,0.25)", borderRadius: 12,
-                padding: "8px 12px", textAlign: "right",
-                color: "#FFFFFF", backdropFilter: "blur(8px)",
-              }}>
-                <div style={{ fontSize: 9, color: "rgba(255,255,255,0.7)", textTransform: "uppercase", letterSpacing: "0.1em", fontWeight: 700 }}>
-                  {overdue ? "OVERDUE" : "DUE"}
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
+              {cycle && (
+                <div style={{
+                  background: s.chipBg, borderRadius: 12,
+                  padding: "8px 12px", textAlign: "right",
+                  color: s.ink, backdropFilter: "blur(8px)",
+                }}>
+                  <div style={{ fontSize: 9, color: s.subink, textTransform: "uppercase", letterSpacing: "0.1em", fontWeight: 700 }}>
+                    {overdue ? "OVERDUE" : "DUE"}
+                  </div>
+                  <div style={{ fontSize: 13, fontWeight: 700, marginTop: 2, letterSpacing: "-0.2px" }}>
+                    {cycle.statementDue.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                  </div>
+                  <div style={{ fontSize: 9.5, color: s.subink, marginTop: 1 }}>
+                    {fmtDueLabel(cycle.daysUntilDue)}
+                  </div>
                 </div>
-                <div style={{ fontSize: 13, fontWeight: 700, marginTop: 2, letterSpacing: "-0.2px" }}>
-                  {cycle.statementDue.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                </div>
-                <div style={{ fontSize: 9.5, color: "rgba(255,255,255,0.85)", marginTop: 1 }}>
-                  {fmtDueLabel(cycle.daysUntilDue)}
-                </div>
-              </div>
-            )}
+              )}
+              <span style={{ fontSize: 12, fontWeight: 800, color: s.ink, letterSpacing: "0.04em", fontStyle: s.network === "AMEX" ? "italic" : "normal" }}>
+                {s.network}
+              </span>
+            </div>
           </div>
         </div>
       </button>
