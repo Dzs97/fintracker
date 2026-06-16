@@ -382,6 +382,19 @@ export function HomeScreen(props: HomeProps) {
           </div>
         </Card>
       )}
+
+      {/* US Money Plan entry point */}
+      <a href="/plan" style={{
+        display: "flex", alignItems: "center", gap: 12, textDecoration: "none",
+        background: G.hero, borderRadius: 16, padding: "16px 18px", marginTop: 2,
+        WebkitTapHighlightColor: "transparent",
+      }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 14, fontWeight: 800, color: "#fff", letterSpacing: "-0.2px" }}>US Money Plan</div>
+          <div style={{ fontSize: 11.5, color: "rgba(255,255,255,0.85)", marginTop: 2 }}>Waterfall · enrollment checklist · take-home</div>
+        </div>
+        <Icon name="chevR" size={18} color="#fff" />
+      </a>
     </div>
   )
 }
