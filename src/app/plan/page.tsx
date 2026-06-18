@@ -67,14 +67,102 @@ export default function PlanPage() {
           <div style={{ fontSize: 11, color: "rgba(255,255,255,0.8)", textTransform: "uppercase", letterSpacing: "0.14em", fontWeight: 700 }}>Plan</div>
           <div style={{ fontSize: 24, fontWeight: 800, color: "#fff", letterSpacing: "-0.5px", marginTop: 4 }}>US Money Plan</div>
           <div style={{ fontSize: 12.5, color: "rgba(255,255,255,0.85)", marginTop: 8, lineHeight: 1.5 }}>
-            Lean Berkeley · debt-free ~Oct–Nov · then save for Asia.<br />
-            Take-home ~$7,126/mo cash + ~$567/mo into HSA/transit · ~$2,375/yr tax saved.
+            $130k · Berkeley (lean) · bi-weekly pay.<br />
+            Debt-free ~Oct–Nov → save for Asia (~3 yrs).
+          </div>
+          <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+            {[
+              { k: "Per check", v: "$3,292" },
+              { k: "Per month", v: "$7,132" },
+              { k: "Asia fund", v: "~$150k+" },
+            ].map(x => (
+              <div key={x.k} style={{ flex: 1, background: "rgba(0,0,0,0.18)", borderRadius: 12, padding: "10px 12px", backdropFilter: "blur(8px)" }}>
+                <div style={{ fontSize: 9, color: "rgba(255,255,255,0.7)", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 700 }}>{x.k}</div>
+                <div style={{ fontSize: 15, fontWeight: 800, color: "#fff", marginTop: 3, letterSpacing: "-0.3px" }}>{x.v}</div>
+              </div>
+            ))}
           </div>
         </div>
       </div>
 
-      {/* Waterfall */}
+      {/* Bi-weekly pay stub */}
       <div style={{ padding: "20px 16px 0" }}>
+        <div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: "0.1em", fontWeight: 700, marginBottom: 12 }}>Your paycheck · bi-weekly (×26/yr)</div>
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, overflow: "hidden" }}>
+          {([
+            ["Gross pay", "$5,000.00", C.text, false],
+            ["HSA (pre-tax)", "−$169.23", C.green, false],
+            ["Commuter (pre-tax)", "−$92.31", C.amber, false],
+            ["Federal tax", "−$723.65", C.muted, false],
+            ["CA state tax", "−$303.61", C.muted, false],
+            ["FICA (SS + Medicare)", "−$362.49", C.muted, false],
+            ["CA SDI", "−$56.86", C.muted, false],
+            ["Net deposit", "$3,291.84", C.green, true],
+          ] as [string, string, string, boolean][]).map(([label, val, color, bold], i, arr) => (
+            <div key={label} style={{
+              display: "flex", justifyContent: "space-between", alignItems: "center",
+              padding: bold ? "14px 16px" : "10px 16px",
+              borderTop: bold ? `1px solid ${C.border}` : "none",
+              background: bold ? C.cardHi : "transparent",
+            }}>
+              <span style={{ fontSize: bold ? 13.5 : 12.5, color: bold ? C.text : C.muted, fontWeight: bold ? 700 : 500 }}>{label}</span>
+              <span style={{ fontSize: bold ? 16 : 13, fontWeight: bold ? 800 : 600, color, fontVariantNumeric: "tabular-nums" }}>{val}</span>
+            </div>
+          ))}
+        </div>
+        <div style={{ fontSize: 10.5, color: C.dim, marginTop: 8, lineHeight: 1.5 }}>
+          Single · standard W-4 · 28.9% effective tax. 2026 brackets land slightly more
+          favorable, and your Sept start means a 2026 refund. Real check ≈ this ±1%.
+        </div>
+      </div>
+
+      {/* Monthly allocation */}
+      <div style={{ padding: "24px 16px 0" }}>
+        <div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: "0.1em", fontWeight: 700, marginBottom: 12 }}>Where the ~$7,132/mo goes</div>
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "8px 16px" }}>
+          {([
+            ["Berkeley life (rent, food, transit)", "~$2,800", C.blue],
+            ["GF rent ($27k MXN)", "~$1,588", C.pink],
+            ["→ Debt now / Asia fund after Nov", "~$2,744", C.green],
+          ] as [string, string, string][]).map(([label, val, color], i, arr) => (
+            <div key={label} style={{
+              display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10,
+              padding: "11px 0", borderBottom: i < arr.length - 1 ? `1px solid ${C.border}` : "none",
+            }}>
+              <span style={{ fontSize: 12.5, color: C.text }}>{label}</span>
+              <span style={{ fontSize: 13.5, fontWeight: 700, color, fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>{val}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Timeline */}
+      <div style={{ padding: "24px 16px 0" }}>
+        <div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: "0.1em", fontWeight: 700, marginBottom: 12 }}>Road to debt-free → Asia</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+          {([
+            ["Jun–Aug", "Survive on MX income. Kill the 96%, minimums, no new debt.", C.amber],
+            ["Sep", "Relocate + 1st US paycheck. Move costs in cash, not credit.", C.blue],
+            ["Oct–Nov", "Berkeley paychecks wipe the toxic 40%+ debt.", C.green],
+            ["Dec '26", "Completely debt-free. Waterfall begins.", C.green],
+            ["2027–29", "Save ~$2,744/mo → invest. Asia fund ~$150k+.", C.purple],
+          ] as [string, string, string][]).map(([when, what, color], i, arr) => (
+            <div key={when} style={{ display: "flex", gap: 12 }}>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0 }}>
+                <div style={{ width: 11, height: 11, borderRadius: "50%", background: color, marginTop: 4 }} />
+                {i < arr.length - 1 && <div style={{ width: 2, flex: 1, background: C.border, marginTop: 2 }} />}
+              </div>
+              <div style={{ paddingBottom: i < arr.length - 1 ? 16 : 0 }}>
+                <div style={{ fontSize: 12.5, fontWeight: 800, color }}>{when}</div>
+                <div style={{ fontSize: 12, color: C.muted, marginTop: 2, lineHeight: 1.5 }}>{what}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Waterfall */}
+      <div style={{ padding: "24px 16px 0" }}>
         <div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: "0.1em", fontWeight: 700, marginBottom: 12 }}>The waterfall — fill in order</div>
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {WATERFALL.map(s => (
