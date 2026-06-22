@@ -78,16 +78,16 @@ const CARD_STYLES: Record<string, CardStyle> = {
     wordmark: { fontSize: 16, fontWeight: 800, color: "#FFFFFF", letterSpacing: "-0.04em" },
     embossShadow: "0 1px 1px rgba(0,0,0,0.45)",
   },
-  // Amex Aeroméxico — The Gold Card, champagne metal
+  // Amex Aeroméxico — The Platinum Card, brushed-platinum metal
   Amex: {
-    gradient: "linear-gradient(135deg, #8C6D28 0%, #D9BD6E 30%, #F0DA9A 50%, #C9A24B 72%, #836321 100%)",
-    product: "The Gold Card · Aeroméxico",
+    gradient: "linear-gradient(135deg, #6E7178 0%, #A7AAB2 28%, #DEE0E5 50%, #B4B7BE 72%, #74777E 100%)",
+    product: "The Platinum Card · Aeroméxico",
     network: "AMEX",
-    ink: "#2A1F08", subink: "rgba(42,31,8,0.58)",
-    chipBg: "rgba(255,255,255,0.28)",
-    shine: "radial-gradient(circle, rgba(255,255,255,0.55) 0%, transparent 55%)",
-    wordmark: { fontSize: 13.5, fontWeight: 700, color: "#2A1F08", letterSpacing: "0.01em", fontStyle: "italic" },
-    embossShadow: "0 1px 0 rgba(255,255,255,0.35)",
+    ink: "#23262B", subink: "rgba(35,38,43,0.58)",
+    chipBg: "rgba(255,255,255,0.30)",
+    shine: "radial-gradient(circle, rgba(255,255,255,0.65) 0%, transparent 55%)",
+    wordmark: { fontSize: 13.5, fontWeight: 700, color: "#23262B", letterSpacing: "0.01em", fontStyle: "italic" },
+    embossShadow: "0 1px 0 rgba(255,255,255,0.4)",
   },
   // Volaris INVEX 2.0 Platino — Volaris magenta into deep purple
   Invex: {
