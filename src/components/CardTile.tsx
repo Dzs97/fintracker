@@ -1,6 +1,7 @@
 "use client"
 import { useState } from "react"
 import { C, G, fmt, fmtDate, buzz } from "@/lib/utils"
+import { Icon } from "./Icon"
 import { computeCycle, fmtDueLabel, type CardConfig } from "@/lib/cardCycles"
 import type { Statement } from "@/types"
 
@@ -134,10 +135,13 @@ export function CardTile({ card, cfg, pool, currentCycleTotal, statementBalance,
   }
   const s = CARD_STYLES[card] ?? DEFAULT_STYLE
   const cycle = cfg ? computeCycle(cfg) : null
-  const overdue = cycle ? cycle.overdue && statementBalance > 0 : false
-  const urgent = cycle ? cycle.daysUntilDue <= 3 && statementBalance > 0 : false
   const cardLast4 = card === "OpenBank" ? "8433" : card === "Amex" ? "3003" : card === "Invex" ? "7191" : "··"
+  // Remaining owed THIS statement: prefer the paid-aware statement balance so a
+  // fully-paid statement never reads as due/overdue. Falls back to the raw pool.
   const remaining = statement ? Math.max(0, statement.closingBalance - statement.paid) : statementBalance
+  const settled = remaining <= 0.01
+  const overdue = cycle ? cycle.overdue && !settled : false
+  const urgent = cycle ? cycle.daysUntilDue <= 3 && !settled : false
 
   return (
     <div style={{
@@ -233,12 +237,21 @@ export function CardTile({ card, cfg, pool, currentCycleTotal, statementBalance,
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           {cycle && (
-            <div style={{ textAlign: "right" }}>
-              <div style={{ fontSize: 9, color: overdue ? C.red : urgent ? C.amber : C.muted, textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 700 }}>
-                {overdue ? "Overdue" : "Due"} {cycle.statementDue.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+            settled ? (
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontSize: 9, color: C.green, textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 4 }}>
+                  <Icon name="check" size={11} color={C.green} />Paid
+                </div>
+                <div style={{ fontSize: 10.5, color: C.dim, marginTop: 2 }}>this statement</div>
               </div>
-              <div style={{ fontSize: 10.5, color: C.dim, marginTop: 2 }}>{fmtDueLabel(cycle.daysUntilDue)}</div>
-            </div>
+            ) : (
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontSize: 9, color: overdue ? C.red : urgent ? C.amber : C.muted, textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 700 }}>
+                  {overdue ? "Overdue" : "Due"} {cycle.statementDue.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                </div>
+                <div style={{ fontSize: 10.5, color: C.dim, marginTop: 2 }}>{fmtDueLabel(cycle.daysUntilDue)}</div>
+              </div>
+            )
           )}
           <span style={{
             fontSize: 11, color: C.dim,
