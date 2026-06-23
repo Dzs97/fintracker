@@ -26,7 +26,7 @@ import { HomeScreen, type HomeNavTarget } from "@/components/HomeScreen"
 import { CardTile } from "@/components/CardTile"
 import { HomeSkeleton, Shimmer } from "@/components/Skeleton"
 import { AssetDetailSheet, type AssetSelection } from "@/components/AssetDetailSheet"
-import type { Expense, Income, CCCharge, Recurring, FutureObligation } from "@/types"
+import type { Expense, Income, CCCharge, Recurring, FutureObligation, Account, Goal } from "@/types"
 
 const TABS = [
   { id: "Overview",    label: "Overview" },
@@ -62,6 +62,8 @@ export default function Dashboard() {
   const [cardConfig, setCardConfig] = useState<Record<string, CardConfig>>({})
   const [recurring, setRecurring] = useState<Recurring[]>([])
   const [obligations, setObligations] = useState<FutureObligation[]>([])
+  const [accounts, setAccounts] = useState<Account[]>([])
+  const [goals, setGoals] = useState<Goal[]>([])
   const [fxSource, setFxSource] = useState<string | undefined>(undefined)
   // Category filter applied to the Expenses tab (set from Home drill-downs)
   const [catFilter, setCatFilter] = useState<string | null>(null)
@@ -128,6 +130,8 @@ export default function Dashboard() {
         cardConfig: Record<string, CardConfig>
         recurring: Recurring[]
         obligations: FutureObligation[]
+        accounts: Account[]
+        goals: Goal[]
       }>("/api/state")
       setTickers(d.tickers)
       setFunds(d.funds)
@@ -135,6 +139,8 @@ export default function Dashboard() {
       setCardConfig(d.cardConfig)
       setRecurring(d.recurring)
       setObligations(d.obligations)
+      setAccounts(d.accounts ?? [])
+      setGoals(d.goals ?? [])
       setFxSource(d.fx.source)
       setState({ ...d.state, fxRate: d.fx.rate ?? FX_FALLBACK })
     } finally {
@@ -559,6 +565,9 @@ export default function Dashboard() {
             prevMoName={prevDate.toLocaleString("en-US", { month: "long" })}
             prevIncMXN={prevIncMXN}
             onNavigate={handleHomeNav}
+            accounts={accounts}
+            goals={goals}
+            cardDebtMXN={(state.statements ?? []).reduce((s, st) => s + Math.max(0, (st.totalOwed ?? st.closingBalance) - st.paid), 0)}
             fxSource={fxSource}
             currentCash={currentCash}
             totalIncMXN={totalIncMXN} totalIncUSD={totalIncUSD}

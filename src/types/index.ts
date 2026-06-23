@@ -106,6 +106,30 @@ export interface FutureObligation {
   notes?: string
 }
 
+/** A liquid account (cash, savings, US tax-advantaged, etc.), in its own currency.
+ *  2.0 bi-national: net worth aggregates these + investments − card debt. */
+export interface Account {
+  id: string
+  name: string
+  currency: "MXN" | "USD"
+  balance: number
+  kind: "checking" | "savings" | "hysa" | "hsa" | "roth" | "brokerage" | "cash" | "other"
+  apr?: number        // optional yield (e.g. OpenBank 13%)
+  note?: string
+}
+
+/** A forward-looking target with progress. kind drives how `current` is computed/shown. */
+export interface Goal {
+  id: string
+  title: string
+  kind: "debt-free" | "savings" | "custom"
+  target: number             // target amount (for savings/custom) — debt-free target = 0 debt
+  currency: "MXN" | "USD"
+  current?: number           // manual current (savings/custom); debt-free is auto from card debt
+  targetDate?: string        // YYYY-MM-DD
+  note?: string
+}
+
 export interface AppState {
   expenses: Expense[]
   income: Income[]

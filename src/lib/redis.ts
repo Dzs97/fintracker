@@ -37,6 +37,9 @@ export const KEYS = {
   backupIdx:   "ft:backup:idx",    // string[] — list of dates (YYYY-MM-DD) of stored snapshots,
                                    //   rotated to keep the most recent N. Each snapshot is at
                                    //   `ft:backup:<date>`.
+  accounts:    "ft:accounts",      // Account[] — liquid accounts in MXN or USD (2.0 bi-national)
+  goals:       "ft:goals",         // Goal[] — savings/payoff targets with progress (2.0)
+  nwHistory:   "ft:nwHistory",     // Array<{date, mxn, usd}> — daily net-worth snapshots (2.0)
   oblLastDec:  "ft:obligationsLastDec",  // Record<card, "YYYY-MM"> — last cycle period for which
                                          //   each card's obligations were auto-decremented.
                                          //   Prevents the daily cron from over-decrementing.

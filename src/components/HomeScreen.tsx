@@ -10,6 +10,9 @@ export interface HomeSeries {
   v: number
 }
 
+import { WorthCockpit } from "./WorthCockpit"
+import type { Account, Goal } from "@/types"
+
 export type HomeNavTarget =
   | "expenses"
   | "income"
@@ -22,6 +25,10 @@ export interface HomeProps {
   prevMoName: string
   prevIncMXN: number
   onNavigate: (target: HomeNavTarget) => void
+  // 2.0 net-worth cockpit
+  accounts: Account[]
+  goals: Goal[]
+  cardDebtMXN: number
   fxSource?: string
   // hero
   currentCash: number
@@ -88,7 +95,7 @@ function AmountDisplay({ value, color, size = 48, suffix }: { value: number; col
 
 export function HomeScreen(props: HomeProps) {
   const {
-    moName, prevMoName, prevIncMXN, onNavigate, fxSource, currentCash, totalIncMXN, totalIncUSD, totalExpMXN,
+    moName, prevMoName, prevIncMXN, onNavigate, accounts, goals, cardDebtMXN, fxSource, currentCash, totalIncMXN, totalIncUSD, totalExpMXN,
     monthInvMXN, monthCCTotal, monthExpCount, monthCCCount, monthInvCount,
     ccPoolTotal, ccWarning, cashDelta, fxRate,
     catTotals, catGrand, catPrev,
@@ -103,6 +110,15 @@ export function HomeScreen(props: HomeProps) {
 
   return (
     <div style={{ padding: "0 14px 24px" }}>
+      {/* ── 2.0 Net-worth cockpit (bi-national + goals) ───────── */}
+      <WorthCockpit
+        fxRate={fxRate}
+        accounts={accounts}
+        goals={goals}
+        investmentValueMXN={liveInvestmentValue}
+        cardDebtMXN={cardDebtMXN}
+      />
+
       {/* ── Hero card ─────────────────────────────────────────── */}
       <div style={{
         position: "relative", overflow: "hidden",
