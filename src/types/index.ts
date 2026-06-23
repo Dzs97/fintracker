@@ -130,6 +130,13 @@ export interface Goal {
   note?: string
 }
 
+/** A daily net-worth snapshot, stored at KEYS.nwHistory (most recent ~180 days). */
+export interface NwSnapshot {
+  date: string   // YYYY-MM-DD
+  mxn: number
+  usd: number
+}
+
 export interface AppState {
   expenses: Expense[]
   income: Income[]

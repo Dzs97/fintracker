@@ -4,9 +4,12 @@ import { redis, KEYS } from "@/lib/redis"
 import { getYahooQuote } from "@/lib/yahoo"
 import { getFintualPrice } from "@/lib/fintual"
 import { computeCycle, type CardConfig } from "@/lib/cardCycles"
+import { getFxRate } from "@/lib/fx"
+import { applyFxConfig, getFxConfig } from "@/lib/fxConfig"
 import { nanoid } from "@/lib/utils"
 import type {
   Statement, Recurring, FutureObligation, Expense, Income, CCCharge, Investment,
+  Account, NwSnapshot,
 } from "@/types"
 
 /**
@@ -187,6 +190,51 @@ async function snapshotBackup(now: Date): Promise<{ date: string; kept: number }
   return { date, kept: keep.length }
 }
 
+const MAX_NW_HISTORY = 180
+
+/** Computes net worth (MXN + USD) and appends a dated snapshot to KEYS.nwHistory.
+ *  Same math as the dashboard: Σ accounts(USD→MXN) + live investment value − card debt.
+ *  Dedupes by date (replaces same-day) and keeps the most recent MAX_NW_HISTORY. */
+async function snapshotNetWorth(now: Date): Promise<NwSnapshot> {
+  const [state, accounts, baseRate, fxCfg, history] = await Promise.all([
+    getState(),
+    redis.get<Account[]>(KEYS.accounts),
+    getFxRate(),
+    getFxConfig(),
+    redis.get<NwSnapshot[]>(KEYS.nwHistory),
+  ])
+  const { rate: fx } = applyFxConfig(baseRate, fxCfg)
+  const accts = accounts ?? []
+
+  const cashMXN = accts.reduce((s, a) => s + (a.currency === "USD" ? a.balance * fx : a.balance), 0)
+
+  const investmentValueMXN = (state.investments ?? []).reduce((s, e) => {
+    const p = state.prices?.[e.name]
+    if (e.inv_type === "stock" && p && e.purchase_price && e.purchase_price > 0) {
+      const shares = e.amount / (e.purchase_price * fx)
+      return s + shares * p.price * fx
+    }
+    if (e.inv_type === "fund" && p && e.purchase_nav && e.purchase_nav > 0) {
+      const shares = e.amount / e.purchase_nav
+      return s + shares * p.price
+    }
+    return s + e.amount
+  }, 0)
+
+  const cardDebtMXN = (state.statements ?? []).reduce(
+    (s, st) => s + Math.max(0, (st.totalOwed ?? st.closingBalance) - st.paid), 0)
+
+  const mxn = cashMXN + investmentValueMXN - cardDebtMXN
+  const usd = fx > 0 ? mxn / fx : 0
+  const date = now.toISOString().split("T")[0]
+  const snap: NwSnapshot = { date, mxn: Math.round(mxn), usd: Math.round(usd) }
+
+  const prev = (history ?? []).filter(h => h.date !== date)
+  const updated = [...prev, snap].slice(-MAX_NW_HISTORY)
+  await redis.set(KEYS.nwHistory, updated)
+  return snap
+}
+
 function authorized(req: NextRequest) {
   const want = process.env.CRON_SECRET
   if (!want) return true
@@ -203,6 +251,8 @@ async function run() {
     fireRecurring(now),
     snapshotBackup(now),
   ])
+  // Snapshot net worth AFTER prices refresh so the data point reflects fresh prices.
+  const nwSnapshot = await snapshotNetWorth(now)
   return {
     ok: true,
     ranAt: now.toISOString(),
@@ -211,6 +261,7 @@ async function run() {
     obligationsDecremented: decremented,
     recurringFired: fired,
     backup,
+    nwSnapshot,
   }
 }
 

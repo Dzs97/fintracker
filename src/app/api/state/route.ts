@@ -4,7 +4,7 @@ import { redis, KEYS } from "@/lib/redis"
 import { getFxRate } from "@/lib/fx"
 import { applyFxConfig, getFxConfig } from "@/lib/fxConfig"
 import type { CardConfig } from "@/lib/cardCycles"
-import type { Recurring, FutureObligation, Account, Goal } from "@/types"
+import type { Recurring, FutureObligation, Account, Goal, NwSnapshot } from "@/types"
 import type { SplitLeg } from "@/lib/splits"
 
 /**
@@ -13,7 +13,7 @@ import type { SplitLeg } from "@/lib/splits"
  * All reads run in parallel server-side where latency to Upstash is ~1ms.
  */
 export async function GET() {
-  const [state, tickers, funds, splits, cardConfig, recurring, obligations, accounts, goals, baseRate, fxCfg] =
+  const [state, tickers, funds, splits, cardConfig, recurring, obligations, accounts, goals, nwHistory, baseRate, fxCfg] =
     await Promise.all([
       getState(),
       redis.get<Record<string, string>>(KEYS.tickers),
@@ -24,6 +24,7 @@ export async function GET() {
       redis.get<FutureObligation[]>(KEYS.obligations),
       redis.get<Account[]>(KEYS.accounts),
       redis.get<Goal[]>(KEYS.goals),
+      redis.get<NwSnapshot[]>(KEYS.nwHistory),
       getFxRate(),
       getFxConfig(),
     ])
@@ -39,5 +40,6 @@ export async function GET() {
     obligations: obligations ?? [],
     accounts:    accounts    ?? [],
     goals:       goals       ?? [],
+    nwHistory:   nwHistory   ?? [],
   })
 }
