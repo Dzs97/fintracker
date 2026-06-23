@@ -4,7 +4,7 @@ import { C, CC_CARDS, CATS } from "@/lib/utils"
 import { Card, Label, inp, lbl, ToggleRow } from "./ui"
 import { Icon } from "./Icon"
 import { computeCycle, type CardConfig } from "@/lib/cardCycles"
-import type { Recurring, FutureObligation } from "@/types"
+import type { Recurring, FutureObligation, Account, Goal } from "@/types"
 
 type SplitLeg = { name: string; weight: number; inv_type?: "fund" | "stock" }
 type SplitMap = Record<string, SplitLeg[]>
@@ -22,6 +22,10 @@ interface Props {
   setRecurring: React.Dispatch<React.SetStateAction<Recurring[]>>
   obligations: FutureObligation[]
   setObligations: React.Dispatch<React.SetStateAction<FutureObligation[]>>
+  accounts: Account[]
+  setAccounts: React.Dispatch<React.SetStateAction<Account[]>>
+  goals: Goal[]
+  setGoals: React.Dispatch<React.SetStateAction<Goal[]>>
   reload: () => Promise<void>
 }
 
@@ -38,7 +42,7 @@ async function api<T>(path: string, method: string, body?: unknown): Promise<T> 
 export function MapsEditor({
   tickers, setTickers, funds, setFunds, splits, setSplits,
   cardConfig, setCardConfig, recurring, setRecurring,
-  obligations, setObligations, reload,
+  obligations, setObligations, accounts, setAccounts, goals, setGoals, reload,
 }: Props) {
   const [newTickerName, setNewTickerName] = useState("")
   const [newTickerSym, setNewTickerSym] = useState("")
@@ -126,6 +130,11 @@ export function MapsEditor({
 
   return (
     <div style={{ marginTop: 12 }}>
+      {/* ── Accounts (2.0) ── */}
+      <AccountsSection accounts={accounts} setAccounts={setAccounts} smallInp={smallInp} />
+      {/* ── Goals (2.0) ── */}
+      <GoalsSection goals={goals} setGoals={setGoals} smallInp={smallInp} />
+
       {/* ── Card cycles ── */}
       <Card style={{ padding: 16, marginBottom: 12 }}>
         <Label>Card statement cycles</Label>
@@ -729,5 +738,112 @@ function SplitRow({ name, legs, onSave, onRemove, onMigrate }: {
         </>
       )}
     </div>
+  )
+}
+
+/* ── Accounts (2.0 bi-national) ─────────────────────────────────────── */
+function AccountsSection({ accounts, setAccounts, smallInp }: {
+  accounts: Account[]
+  setAccounts: React.Dispatch<React.SetStateAction<Account[]>>
+  smallInp: React.CSSProperties
+}) {
+  const [adding, setAdding] = useState(false)
+  const blank = { name: "", currency: "MXN" as "MXN" | "USD", balance: "", kind: "checking" }
+  const [form, setForm] = useState(blank)
+
+  const save = async (a: Partial<Account> & { id?: string }) => {
+    const out = await api<{ entry: Account }>("/api/accounts", "POST", a)
+    setAccounts(l => { const i = l.findIndex(x => x.id === out.entry.id); return i === -1 ? [...l, out.entry] : l.map(x => x.id === out.entry.id ? out.entry : x) })
+  }
+  const remove = async (id: string) => { if (!confirm("Remove account?")) return; await api("/api/accounts", "DELETE", { id }); setAccounts(l => l.filter(a => a.id !== id)) }
+
+  return (
+    <Card style={{ padding: 16, marginBottom: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+        <Label style={{ marginBottom: 0 }}>Accounts (net worth)</Label>
+        <button onClick={() => setAdding(v => !v)} style={{ padding: "5px 10px", fontSize: 10.5, fontWeight: 700, border: adding ? `1px solid ${C.border}` : "none", borderRadius: 8, cursor: "pointer", background: adding ? C.surface : C.green, color: adding ? C.muted : "#0B0D11", fontFamily: "inherit" }}>{adding ? "Cancel" : "Add"}</button>
+      </div>
+      {accounts.map(a => (
+        <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: `1px solid ${C.border}` }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 600 }}>{a.name} <span style={{ fontSize: 10, color: C.dim }}>{a.kind}</span></div>
+            {/* editable balance */}
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 3 }}>
+              <span style={{ fontSize: 10, color: a.currency === "USD" ? C.blue : C.green, fontWeight: 700 }}>{a.currency}</span>
+              <input type="number" defaultValue={a.balance} onBlur={e => { const v = parseFloat(e.target.value); if (!isNaN(v) && v !== a.balance) save({ ...a, balance: v }) }}
+                style={{ width: 110, padding: "5px 8px", fontSize: 13, fontFamily: "inherit", border: `1px solid ${C.border}`, borderRadius: 8, background: C.bg, color: C.text, outline: "none" }} />
+            </div>
+          </div>
+          <button onClick={() => remove(a.id)} style={{ background: "none", border: "none", cursor: "pointer", color: C.dim, padding: 4 }}><Icon name="close" size={14} /></button>
+        </div>
+      ))}
+      {adding && (
+        <div style={{ marginTop: 12, display: "flex", flexWrap: "wrap", gap: 6 }}>
+          <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Name (e.g. Chase checking)" style={{ ...smallInp, flex: 1, minWidth: 140 }} />
+          <select value={form.currency} onChange={e => setForm({ ...form, currency: e.target.value as "MXN" | "USD" })} style={{ ...smallInp, width: 72 }}><option>MXN</option><option>USD</option></select>
+          <select value={form.kind} onChange={e => setForm({ ...form, kind: e.target.value })} style={{ ...smallInp, width: 100 }}>
+            {["checking", "savings", "hysa", "hsa", "roth", "brokerage", "cash", "other"].map(k => <option key={k}>{k}</option>)}
+          </select>
+          <input type="number" value={form.balance} onChange={e => setForm({ ...form, balance: e.target.value })} placeholder="Balance" style={{ ...smallInp, width: 100 }} />
+          <button onClick={async () => { if (!form.name) return; await save({ name: form.name, currency: form.currency, balance: parseFloat(form.balance) || 0, kind: form.kind as Account["kind"] }); setForm(blank); setAdding(false) }}
+            style={{ padding: "0 14px", fontSize: 12, fontWeight: 700, border: "none", borderRadius: 10, cursor: "pointer", background: C.green, color: "#0B0D11", fontFamily: "inherit" }}>Add</button>
+        </div>
+      )}
+    </Card>
+  )
+}
+
+/* ── Goals (2.0) ────────────────────────────────────────────────────── */
+function GoalsSection({ goals, setGoals, smallInp }: {
+  goals: Goal[]
+  setGoals: React.Dispatch<React.SetStateAction<Goal[]>>
+  smallInp: React.CSSProperties
+}) {
+  const [adding, setAdding] = useState(false)
+  const blank = { title: "", kind: "savings" as Goal["kind"], target: "", currency: "USD" as "MXN" | "USD", current: "", targetDate: "" }
+  const [form, setForm] = useState(blank)
+
+  const save = async (g: Partial<Goal> & { id?: string }) => {
+    const out = await api<{ entry: Goal }>("/api/goals", "POST", g)
+    setGoals(l => { const i = l.findIndex(x => x.id === out.entry.id); return i === -1 ? [...l, out.entry] : l.map(x => x.id === out.entry.id ? out.entry : x) })
+  }
+  const remove = async (id: string) => { if (!confirm("Remove goal?")) return; await api("/api/goals", "DELETE", { id }); setGoals(l => l.filter(g => g.id !== id)) }
+
+  return (
+    <Card style={{ padding: 16, marginBottom: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+        <Label style={{ marginBottom: 0 }}>Goals</Label>
+        <button onClick={() => setAdding(v => !v)} style={{ padding: "5px 10px", fontSize: 10.5, fontWeight: 700, border: adding ? `1px solid ${C.border}` : "none", borderRadius: 8, cursor: "pointer", background: adding ? C.surface : C.purple, color: adding ? C.muted : "#0B0D11", fontFamily: "inherit" }}>{adding ? "Cancel" : "Add"}</button>
+      </div>
+      {goals.map(g => (
+        <div key={g.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: `1px solid ${C.border}` }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 600 }}>{g.title} <span style={{ fontSize: 10, color: C.dim }}>{g.kind}</span></div>
+            <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+              {g.kind === "debt-free" ? "auto-tracks card debt" : `target ${g.currency} ${g.target.toLocaleString()}`}{g.targetDate ? ` · ${g.targetDate}` : ""}
+            </div>
+            {g.kind !== "debt-free" && (
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
+                <span style={{ fontSize: 10, color: C.green }}>saved</span>
+                <input type="number" defaultValue={g.current ?? 0} onBlur={e => { const v = parseFloat(e.target.value); if (!isNaN(v) && v !== (g.current ?? 0)) save({ ...g, current: v }) }}
+                  style={{ width: 110, padding: "5px 8px", fontSize: 13, fontFamily: "inherit", border: `1px solid ${C.border}`, borderRadius: 8, background: C.bg, color: C.text, outline: "none" }} />
+              </div>
+            )}
+          </div>
+          <button onClick={() => remove(g.id)} style={{ background: "none", border: "none", cursor: "pointer", color: C.dim, padding: 4 }}><Icon name="close" size={14} /></button>
+        </div>
+      ))}
+      {adding && (
+        <div style={{ marginTop: 12, display: "flex", flexWrap: "wrap", gap: 6 }}>
+          <input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="Title" style={{ ...smallInp, flex: 1, minWidth: 120 }} />
+          <select value={form.kind} onChange={e => setForm({ ...form, kind: e.target.value as Goal["kind"] })} style={{ ...smallInp, width: 100 }}><option value="savings">savings</option><option value="debt-free">debt-free</option><option value="custom">custom</option></select>
+          <select value={form.currency} onChange={e => setForm({ ...form, currency: e.target.value as "MXN" | "USD" })} style={{ ...smallInp, width: 72 }}><option>USD</option><option>MXN</option></select>
+          <input type="number" value={form.target} onChange={e => setForm({ ...form, target: e.target.value })} placeholder="Target" style={{ ...smallInp, width: 100 }} />
+          <input type="date" value={form.targetDate} onChange={e => setForm({ ...form, targetDate: e.target.value })} style={{ ...smallInp, width: 140 }} />
+          <button onClick={async () => { if (!form.title) return; await save({ title: form.title, kind: form.kind, target: parseFloat(form.target) || 0, currency: form.currency, current: parseFloat(form.current) || 0, targetDate: form.targetDate || undefined }); setForm(blank); setAdding(false) }}
+            style={{ padding: "0 14px", fontSize: 12, fontWeight: 700, border: "none", borderRadius: 10, cursor: "pointer", background: C.purple, color: "#0B0D11", fontFamily: "inherit" }}>Add</button>
+        </div>
+      )}
+    </Card>
   )
 }

@@ -1394,6 +1394,8 @@ export default function Dashboard() {
                 cardConfig={cardConfig} setCardConfig={setCardConfig}
                 recurring={recurring} setRecurring={setRecurring}
                 obligations={obligations} setObligations={setObligations}
+                accounts={accounts} setAccounts={setAccounts}
+                goals={goals} setGoals={setGoals}
                 reload={load}
               />
             )}
