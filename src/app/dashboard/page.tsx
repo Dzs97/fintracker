@@ -26,7 +26,7 @@ import { HomeScreen, type HomeNavTarget } from "@/components/HomeScreen"
 import { CardTile } from "@/components/CardTile"
 import { HomeSkeleton, Shimmer } from "@/components/Skeleton"
 import { AssetDetailSheet, type AssetSelection } from "@/components/AssetDetailSheet"
-import type { Expense, Income, CCCharge, Recurring, FutureObligation, Account, Goal } from "@/types"
+import type { Expense, Income, CCCharge, Recurring, FutureObligation, Account, Goal, NwSnapshot } from "@/types"
 
 const TABS = [
   { id: "Overview",    label: "Overview" },
@@ -64,7 +64,20 @@ export default function Dashboard() {
   const [obligations, setObligations] = useState<FutureObligation[]>([])
   const [accounts, setAccounts] = useState<Account[]>([])
   const [goals, setGoals] = useState<Goal[]>([])
+  const [nwHistory, setNwHistory] = useState<NwSnapshot[]>([])
   const [fxSource, setFxSource] = useState<string | undefined>(undefined)
+  // Global display currency, persisted to localStorage so it survives reloads.
+  const [displayCcy, setDisplayCcy] = useState<"MXN" | "USD">("MXN")
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("ft:displayCcy")
+      if (saved === "MXN" || saved === "USD") setDisplayCcy(saved)
+    } catch { /* ignore */ }
+  }, [])
+  const changeDisplayCcy = useCallback((c: "MXN" | "USD") => {
+    setDisplayCcy(c)
+    try { localStorage.setItem("ft:displayCcy", c) } catch { /* ignore */ }
+  }, [])
   // Category filter applied to the Expenses tab (set from Home drill-downs)
   const [catFilter, setCatFilter] = useState<string | null>(null)
   // Asset drill-down sheet (opened from P&L cards)
@@ -132,6 +145,7 @@ export default function Dashboard() {
         obligations: FutureObligation[]
         accounts: Account[]
         goals: Goal[]
+        nwHistory: NwSnapshot[]
       }>("/api/state")
       setTickers(d.tickers)
       setFunds(d.funds)
@@ -141,6 +155,7 @@ export default function Dashboard() {
       setObligations(d.obligations)
       setAccounts(d.accounts ?? [])
       setGoals(d.goals ?? [])
+      setNwHistory(d.nwHistory ?? [])
       setFxSource(d.fx.source)
       setState({ ...d.state, fxRate: d.fx.rate ?? FX_FALLBACK })
     } finally {
@@ -320,6 +335,12 @@ export default function Dashboard() {
     return s + e.amount
   }, 0)
   const investmentPL = investmentValue - investmentCost
+
+  // ── Live net worth (MXN) — same math as the cron snapshot ──
+  // Σ accounts(USD→MXN) + live investment value − card debt.
+  const accountsCashMXN = accounts.reduce((s, a) => s + (a.currency === "USD" ? a.balance * FX : a.balance), 0)
+  const cardDebtMXN = (state.statements ?? []).reduce((s, st) => s + Math.max(0, (st.totalOwed ?? st.closingBalance) - st.paid), 0)
+  const netWorthMXN = accountsCashMXN + investmentValue - cardDebtMXN
 
   const invByName: Record<string, { name: string; gf: boolean; cost: number; shares: number }> = {}
   state.investments.filter(i => i.inv_type === "stock").forEach(i => {
@@ -554,6 +575,8 @@ export default function Dashboard() {
         onQuickLog={() => setQuickOpen(true)}
         onRefresh={doRefresh}
         refreshing={refreshing}
+        netWorth={displayCcy === "USD" ? netWorthMXN / FX : netWorthMXN}
+        netWorthCcy={displayCcy}
       />
 
       <div key={tab} className="ft-fade-up" style={{ flex: 1, overflow: "auto", WebkitOverflowScrolling: "touch", paddingBottom: 90 }}>
@@ -567,7 +590,11 @@ export default function Dashboard() {
             onNavigate={handleHomeNav}
             accounts={accounts}
             goals={goals}
-            cardDebtMXN={(state.statements ?? []).reduce((s, st) => s + Math.max(0, (st.totalOwed ?? st.closingBalance) - st.paid), 0)}
+            cardDebtMXN={cardDebtMXN}
+            nwHistory={nwHistory}
+            displayCcy={displayCcy}
+            onChangeCcy={changeDisplayCcy}
+            netWorthMXN={netWorthMXN}
             fxSource={fxSource}
             currentCash={currentCash}
             totalIncMXN={totalIncMXN} totalIncUSD={totalIncUSD}

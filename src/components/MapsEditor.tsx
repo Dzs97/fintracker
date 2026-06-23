@@ -757,12 +757,43 @@ function AccountsSection({ accounts, setAccounts, smallInp }: {
   }
   const remove = async (id: string) => { if (!confirm("Remove account?")) return; await api("/api/accounts", "DELETE", { id }); setAccounts(l => l.filter(a => a.id !== id)) }
 
+  const hasUSD = accounts.some(a => a.currency === "USD")
+  const [seeding, setSeeding] = useState(false)
+  const addUSAccounts = async () => {
+    if (seeding) return
+    setSeeding(true)
+    try {
+      const seeds: Array<Partial<Account>> = [
+        { name: "Chase checking", currency: "USD", balance: 0, kind: "checking" },
+        { name: "HSA", currency: "USD", balance: 0, kind: "hsa" },
+        { name: "Roth IRA", currency: "USD", balance: 0, kind: "roth" },
+        { name: "Brokerage", currency: "USD", balance: 0, kind: "brokerage" },
+      ]
+      for (const s of seeds) await save(s)
+    } finally { setSeeding(false) }
+  }
+
   return (
     <Card style={{ padding: 16, marginBottom: 12 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
         <Label style={{ marginBottom: 0 }}>Accounts (net worth)</Label>
         <button onClick={() => setAdding(v => !v)} style={{ padding: "5px 10px", fontSize: 10.5, fontWeight: 700, border: adding ? `1px solid ${C.border}` : "none", borderRadius: 8, cursor: "pointer", background: adding ? C.surface : C.green, color: adding ? C.muted : "#0B0D11", fontFamily: "inherit" }}>{adding ? "Cancel" : "Add"}</button>
       </div>
+      {!hasUSD && (
+        <button onClick={addUSAccounts} disabled={seeding} style={{
+          width: "100%", textAlign: "left", marginBottom: 12, cursor: seeding ? "default" : "pointer",
+          background: `linear-gradient(135deg, ${C.blue}22 0%, ${C.purple}22 100%)`,
+          border: `1px solid ${C.blue}55`, borderRadius: 12, padding: "12px 14px",
+          display: "flex", alignItems: "center", gap: 12, fontFamily: "inherit",
+          WebkitTapHighlightColor: "transparent", opacity: seeding ? 0.6 : 1,
+        }}>
+          <span style={{ fontSize: 20 }}>🇺🇸</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: C.blue }}>{seeding ? "Adding…" : "Moving to SF? Add US accounts"}</div>
+            <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>Chase · HSA · Roth IRA · Brokerage ($0 to start)</div>
+          </div>
+        </button>
+      )}
       {accounts.map(a => (
         <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: `1px solid ${C.border}` }}>
           <div style={{ flex: 1 }}>

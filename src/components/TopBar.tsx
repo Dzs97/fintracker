@@ -1,5 +1,5 @@
 "use client"
-import { C } from "@/lib/utils"
+import { C, fmt } from "@/lib/utils"
 import { Icon } from "./Icon"
 
 interface Props {
@@ -12,6 +12,8 @@ interface Props {
   onQuickLog?: () => void
   onRefresh?: () => void
   refreshing?: boolean
+  netWorth?: number          // already converted to display currency
+  netWorthCcy?: "MXN" | "USD"
 }
 
 const HELLOS = ["Hola", "Hey", "Hi"]
@@ -22,7 +24,7 @@ function pickGreeting(name: string | undefined): { hi: string; sub: string } {
   return { hi, sub: time }
 }
 
-export function TopBar({ name, moName, vy, onPrev, onNext, atCurrent, onQuickLog, onRefresh, refreshing }: Props) {
+export function TopBar({ name, moName, vy, onPrev, onNext, atCurrent, onQuickLog, onRefresh, refreshing, netWorth, netWorthCcy }: Props) {
   const { hi, sub } = pickGreeting(name)
   const initials = (name ?? "FT").trim().slice(0, 2).toUpperCase()
   return (
@@ -42,7 +44,17 @@ export function TopBar({ name, moName, vy, onPrev, onNext, atCurrent, onQuickLog
           }}>{initials}</div>
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 16, fontWeight: 700, color: C.strong, lineHeight: 1.1, letterSpacing: "-0.3px" }}>{hi}</div>
-            <div style={{ fontSize: 11.5, color: C.muted, marginTop: 2 }}>{sub}</div>
+            {netWorth != null ? (
+              <div style={{ display: "inline-flex", alignItems: "baseline", gap: 5, marginTop: 4 }}>
+                <span style={{ fontSize: 9, color: C.muted, textTransform: "uppercase", letterSpacing: "0.1em", fontWeight: 700 }}>Net</span>
+                <span style={{ fontSize: 13, fontWeight: 800, color: netWorth >= 0 ? C.green : C.red, letterSpacing: "-0.3px", fontVariantNumeric: "tabular-nums" }}>
+                  {netWorth < 0 ? "−" : ""}{fmt(Math.abs(netWorth))}
+                </span>
+                <span style={{ fontSize: 9.5, color: C.dim, fontWeight: 600 }}>{netWorthCcy ?? "MXN"}</span>
+              </div>
+            ) : (
+              <div style={{ fontSize: 11.5, color: C.muted, marginTop: 2 }}>{sub}</div>
+            )}
           </div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>

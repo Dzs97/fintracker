@@ -57,22 +57,29 @@ export function BottomNav({ active, onChange, onCenterAction }: Props) {
 
 function NavButton({ tab, active, onClick }: { tab: typeof TABS[number]; active: boolean; onClick: () => void }) {
   return (
-    <button onClick={onClick} style={{
-      flex: 1, padding: "8px 4px", border: "none", background: "transparent",
+    <button onClick={() => { buzz(); onClick() }} style={{
+      flex: 1, padding: "6px 4px 4px", border: "none", background: "transparent",
       cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+      position: "relative",
       color: active ? C.green : C.muted,
       WebkitTapHighlightColor: "transparent",
       transition: "color 150ms cubic-bezier(0.4,0,0.2,1)",
     }}>
+      {/* Active top indicator bar */}
+      <span style={{
+        position: "absolute", top: 0, width: active ? 20 : 0, height: 3, borderRadius: 3,
+        background: C.green, transition: "width 200ms cubic-bezier(0.34,1.56,0.64,1)",
+      }} />
       <div style={{
-        padding: "5px 14px", borderRadius: 100,
-        background: active ? C.green + "1A" : "transparent",
+        padding: "5px 16px", borderRadius: 100,
+        background: active ? C.green + "22" : "transparent",
         transition: "background 200ms cubic-bezier(0.4,0,0.2,1)",
         display: "flex", alignItems: "center", justifyContent: "center",
+        transform: active ? "translateY(-1px)" : "translateY(0)",
       }}>
-        <Icon name={tab.icon} size={22} color={active ? C.green : C.muted} fill={tab.id === "Home"} />
+        <Icon name={tab.icon} size={22} color={active ? C.green : C.muted} fill={active} />
       </div>
-      <span style={{ fontSize: 10, fontWeight: active ? 700 : 500, letterSpacing: "0.02em" }}>{tab.label}</span>
+      <span style={{ fontSize: 10, fontWeight: active ? 800 : 500, letterSpacing: "0.02em", color: active ? C.green : C.muted }}>{tab.label}</span>
     </button>
   )
 }

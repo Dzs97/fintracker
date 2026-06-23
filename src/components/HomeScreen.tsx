@@ -11,7 +11,7 @@ export interface HomeSeries {
 }
 
 import { WorthCockpit } from "./WorthCockpit"
-import type { Account, Goal } from "@/types"
+import type { Account, Goal, NwSnapshot } from "@/types"
 
 export type HomeNavTarget =
   | "expenses"
@@ -29,6 +29,10 @@ export interface HomeProps {
   accounts: Account[]
   goals: Goal[]
   cardDebtMXN: number
+  nwHistory: NwSnapshot[]
+  displayCcy: "MXN" | "USD"
+  onChangeCcy: (c: "MXN" | "USD") => void
+  netWorthMXN: number
   fxSource?: string
   // hero
   currentCash: number
@@ -95,7 +99,7 @@ function AmountDisplay({ value, color, size = 48, suffix }: { value: number; col
 
 export function HomeScreen(props: HomeProps) {
   const {
-    moName, prevMoName, prevIncMXN, onNavigate, accounts, goals, cardDebtMXN, fxSource, currentCash, totalIncMXN, totalIncUSD, totalExpMXN,
+    moName, prevMoName, prevIncMXN, onNavigate, accounts, goals, cardDebtMXN, nwHistory, displayCcy, onChangeCcy, fxSource, currentCash, totalIncMXN, totalIncUSD, totalExpMXN,
     monthInvMXN, monthCCTotal, monthExpCount, monthCCCount, monthInvCount,
     ccPoolTotal, ccWarning, cashDelta, fxRate,
     catTotals, catGrand, catPrev,
@@ -117,25 +121,28 @@ export function HomeScreen(props: HomeProps) {
         goals={goals}
         investmentValueMXN={liveInvestmentValue}
         cardDebtMXN={cardDebtMXN}
+        nwHistory={nwHistory}
+        ccy={displayCcy}
+        onChangeCcy={onChangeCcy}
       />
 
-      {/* ── Hero card ─────────────────────────────────────────── */}
+      {/* ── This month section header ─────────────────────────── */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "4px 2px 10px" }}>
+        <span style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: "0.12em", fontWeight: 700 }}>This month</span>
+        <span style={{ flex: 1, height: 1, background: C.border }} />
+        <span style={{ fontSize: 11, color: C.dim }}>{moName}</span>
+      </div>
+
+      {/* ── Month balance (secondary to net worth) ────────────── */}
       <div style={{
         position: "relative", overflow: "hidden",
-        background: C.elevated, border: `1px solid ${C.border}`,
-        borderRadius: 22, padding: "24px 22px 22px",
-        marginBottom: 16,
+        background: C.card, border: `1px solid ${C.border}`,
+        borderRadius: 18, padding: "16px 18px",
+        marginBottom: 14,
       }}>
-        {/* Decorative glow */}
-        <div style={{
-          position: "absolute", top: -80, right: -60, width: 240, height: 240,
-          borderRadius: "50%",
-          background: currentCash >= 0 ? `radial-gradient(circle, ${C.green}33, transparent 70%)` : `radial-gradient(circle, ${C.red}33, transparent 70%)`,
-          pointerEvents: "none",
-        }} />
         <div style={{ position: "relative" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
-            <div style={{ fontSize: 10.5, color: C.muted, textTransform: "uppercase", letterSpacing: "0.14em", fontWeight: 700 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+            <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.1em", fontWeight: 700 }}>
               {moName} balance
             </div>
             {cashDelta !== null && (
@@ -148,8 +155,8 @@ export function HomeScreen(props: HomeProps) {
               </span>
             )}
           </div>
-          <AmountDisplay value={currentCash} color={currentCash >= 0 ? C.green : C.red} size={52} suffix="MXN" />
-          <div style={{ fontSize: 11.5, color: C.muted, marginTop: 8 }}>
+          <AmountDisplay value={currentCash} color={currentCash >= 0 ? C.green : C.red} size={32} suffix="MXN" />
+          <div style={{ fontSize: 11, color: C.muted, marginTop: 6 }}>
             Income − expenses − investments
           </div>
 
@@ -292,8 +299,8 @@ export function HomeScreen(props: HomeProps) {
         }}
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 4 }}>
-          <Label style={{ marginBottom: 0 }}>Net worth</Label>
-          <div style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 9.5, color: C.dim }}>6 mo<Icon name="chevR" size={11} color={C.dim} /></div>
+          <Label style={{ marginBottom: 0 }}>Cash flow saved · 6 mo</Label>
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 9.5, color: C.dim }}>invest<Icon name="chevR" size={11} color={C.dim} /></div>
         </div>
         <AmountDisplay value={netWorth} color={netWorth >= 0 ? C.green : C.red} size={28} suffix="MXN" />
         <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>
