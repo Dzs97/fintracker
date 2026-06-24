@@ -74,6 +74,7 @@ export const CAT_COLORS: Record<string, string> = {
   "Gifts":          "#FF6BAA",   // rose
   "House Supplies": "#9B7FE0",   // lavender
   "Clothes":        "#FFD166",   // mustard
+  "GF":             "#E86FC4",   // magenta — Mariana
   "Other":          "#8E8F95",
 }
 export const CATS = Object.keys(CAT_COLORS) as Array<keyof typeof CAT_COLORS>

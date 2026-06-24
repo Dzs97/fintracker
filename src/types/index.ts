@@ -2,7 +2,7 @@ export type Category =
   | "Food & Dining" | "Transport" | "Housing" | "Health"
   | "Entertainment" | "Shopping" | "Card Payments" | "Pets"
   | "Groceries" | "Furniture" | "Gifts" | "House Supplies"
-  | "Clothes" | "Other"
+  | "Clothes" | "GF" | "Other"
 
 export type CCCard = "OpenBank" | "Amex" | "Invex"
 export type InvType = "fund" | "stock"

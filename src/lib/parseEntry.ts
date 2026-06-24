@@ -138,10 +138,13 @@ const CATS_SORTED = sortedEntries(CATS)
 
 function guessCategory(text: string, learned?: Record<string, string>): string {
   const lower = text.toLowerCase()
+  const words = new Set(lower.split(/[^\p{L}\p{N}]+/u).filter(Boolean))
   // User overrides come first — most specific. Also length-sorted.
+  // Learned keys are single tokens, so match on WHOLE WORDS, never substrings:
+  // "mex" must not hit "mexico", "and" must not hit arbitrary text.
   if (learned) {
     for (const [k, v] of sortedEntries(learned)) {
-      if (lower.includes(k)) return v
+      if (k.includes(" ") ? lower.includes(k) : words.has(k)) return v
     }
   }
   for (const [k, v] of CATS_SORTED) {

@@ -9,8 +9,20 @@ import { redis, KEYS } from "./redis"
 export type LearnedMap = Record<string, string>
 
 const SKIP_TOKENS = new Set([
-  "the", "a", "el", "la", "de", "del", "en", "en", "para",
+  // stopwords (en/es)
+  "the", "a", "el", "la", "de", "del", "en", "para", "and", "one",
   "y", "o", "un", "una", "card", "payment", "statement", "settled",
+  // generic words that wrongly poison categories when learned
+  "food", "house", "foot", "care", "online", "transfer", "fees", "final",
+  "plan", "pagos", "pago", "financing", "diferidos", "retail", "mexico", "mex",
+  // payment platforms — they carry no category signal of their own
+  "paypal", "mercadopago", "mercado", "membership", "spei", "transferencia",
+  // card + account names
+  "openbank", "amex", "invex", "dolarapp", "savings", "nubank",
+  // months
+  "jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec",
+  // currencies / units
+  "usd", "mxn", "msi", "meses",
 ])
 
 function tokenize(name: string): string[] {
@@ -18,7 +30,7 @@ function tokenize(name: string): string[] {
     .toLowerCase()
     .replace(/[^\p{L}\p{N}\s]/gu, " ")
     .split(/\s+/)
-    .filter(t => t.length >= 3 && !SKIP_TOKENS.has(t))
+    .filter(t => t.length >= 4 && !SKIP_TOKENS.has(t))
 }
 
 export async function loadLearned(): Promise<LearnedMap> {
