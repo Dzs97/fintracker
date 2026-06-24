@@ -106,7 +106,9 @@ const CATS: Record<string, string> = {
 const CC_CARDS = ["openbank", "amex", "invex"]
 const CARD_MAP: Record<string, string> = { openbank: "OpenBank", amex: "Amex", invex: "Invex" }
 const INV_TYPES = ["fund", "stock", "fondo", "accion"]
-const INCOME_KEYWORDS = ["income", "salary", "ingreso", "pago", "treeline", "usd"]
+// NB: "pago" is intentionally NOT here — in Spanish it means "payment" (expense-
+// leaning), and "pago tarjeta" is a card payment. Real income uses income/salary/etc.
+const INCOME_KEYWORDS = ["income", "salary", "ingreso", "treeline", "usd"]
 const INV_KEYWORDS = ["fintual", "nubank", "nu", "gbm", "stock", "fund", "invest", "compra"]
 // Names that are inherently funds — if the entry text mentions any, treat as fund
 // even when no explicit "fund" / "fondo" keyword is present.
