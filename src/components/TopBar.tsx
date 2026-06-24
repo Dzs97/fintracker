@@ -1,6 +1,7 @@
 "use client"
 import { C, fmt } from "@/lib/utils"
 import { Icon } from "./Icon"
+import { Logo } from "./Logo"
 
 interface Props {
   name?: string
@@ -26,7 +27,6 @@ function pickGreeting(name: string | undefined): { hi: string; sub: string } {
 
 export function TopBar({ name, moName, vy, onPrev, onNext, atCurrent, onQuickLog, onRefresh, refreshing, netWorth, netWorthCcy }: Props) {
   const { hi, sub } = pickGreeting(name)
-  const initials = (name ?? "FT").trim().slice(0, 2).toUpperCase()
   return (
     <div style={{
       position: "sticky", top: 0, zIndex: 10,
@@ -35,13 +35,7 @@ export function TopBar({ name, moName, vy, onPrev, onNext, atCurrent, onQuickLog
     }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
-          <div style={{
-            width: 38, height: 38, borderRadius: 12,
-            background: `linear-gradient(135deg, ${C.purple} 0%, ${C.pink} 100%)`,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 13, fontWeight: 800, color: "#FFFFFF",
-            letterSpacing: "-0.3px", flexShrink: 0,
-          }}>{initials}</div>
+          <Logo size={38} radius={12} />
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 16, fontWeight: 700, color: C.strong, lineHeight: 1.1, letterSpacing: "-0.3px" }}>{hi}</div>
             {netWorth != null ? (
