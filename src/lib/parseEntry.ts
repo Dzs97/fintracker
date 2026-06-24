@@ -149,12 +149,27 @@ function guessCategory(text: string, learned?: Record<string, string>): string {
 }
 
 export type ParsedEntry =
-  | { entry_type: "expense";    name: string; amount: number; date: string; cat: string; note?: string }
-  | { entry_type: "income";     name: string; amount: number; date: string; note?: string }
+  | { entry_type: "expense";    name: string; amount: number; date: string; cat: string; note?: string; accountId?: string }
+  | { entry_type: "income";     name: string; amount: number; date: string; note?: string; accountId?: string }
   | { entry_type: "cc";         name: string; amount: number; date: string; cat: string; card: string; installments: number }
   | { entry_type: "investment"; name: string; amount: number; date: string; gf: boolean; inv_type: "fund" | "stock" }
 
-export function parseEntry(raw: string, learned?: Record<string, string>): ParsedEntry | { error: string } {
+// Derive lowercase aliases for an account name, skipping tokens that collide
+// with card names (e.g. "openbank") so "OpenBank Savings" matches on "savings".
+function accountAliases(name: string): string[] {
+  const lower = name.toLowerCase().trim()
+  const out = new Set<string>([lower, lower.replace(/\s+/g, "")])
+  for (const w of lower.split(/\s+/)) {
+    if (w.length >= 4 && !CC_CARDS.includes(w)) out.add(w)
+  }
+  return [...out]
+}
+
+export function parseEntry(
+  raw: string,
+  learned?: Record<string, string>,
+  accounts?: Array<{ id: string; name: string }>,
+): ParsedEntry | { error: string } {
   const text = (raw ?? "").trim()
   if (!text) return { error: "empty input" }
 
@@ -176,22 +191,33 @@ export function parseEntry(raw: string, learned?: Record<string, string>): Parse
     date = `${y}-${MONTHS[moMatch[1].toLowerCase()]}-${String(parseInt(moMatch[2])).padStart(2, "0")}`
   }
 
-  // Name = tokens minus numbers/cards/keywords
-  const nameTokens = tokens.filter(t => !/^\d/.test(t) && !CC_CARDS.includes(t) && !STRIP_TOKENS.has(t))
+  // Resolve a named account (longest alias first so "openbank savings" beats "savings").
+  // Build [alias, accountId] pairs, sorted by alias length DESC.
+  const acctPairs: Array<[string, string]> = []
+  for (const a of accounts ?? []) for (const al of accountAliases(a.name)) acctPairs.push([al, a.id])
+  acctPairs.sort((p, q) => q[0].length - p[0].length)
+  const matchedAcct = acctPairs.find(([al]) => lower.includes(al))
+  const accountId = matchedAcct?.[1]
+  const acctAliasSet = new Set(acctPairs.map(([al]) => al))
+
+  // Name = tokens minus numbers/cards/keywords/account-aliases
+  const nameTokens = tokens.filter(t =>
+    !/^\d/.test(t) && !CC_CARDS.includes(t) && !STRIP_TOKENS.has(t) && !acctAliasSet.has(t))
   const name = nameTokens.join(" ").trim() || text.split(/\s+/).slice(1, 3).join(" ")
 
   const isIncome = INCOME_KEYWORDS.some(k => lower.includes(k))
   const isInvestment = INV_KEYWORDS.some(k => lower.includes(k))
   const isDolarApp = lower.includes("dolarapp")
   const ccCard = CC_CARDS.find(c => lower.includes(c))
-  const isCC = !!ccCard && !isInvestment
+  // Naming an account means cash left that account → treat as expense/income, not a card charge.
+  const isCC = !!ccCard && !isInvestment && !accountId
 
   // Installments: "3 msi" / "12 meses"
   const instMatch = text.match(/(\d+)\s*(msi|meses|mensualidades|installments)/i)
   const installments = instMatch ? parseInt(instMatch[1]) : 1
 
   if (isIncome) {
-    return { entry_type: "income", name: name || "Income", amount, date }
+    return { entry_type: "income", name: name || "Income", amount, date, accountId }
   }
   if (isInvestment) {
     const isGF = lower.includes("gf") || lower.includes(" her ")
@@ -219,5 +245,6 @@ export function parseEntry(raw: string, learned?: Record<string, string>): Parse
     entry_type: "expense", name, amount, date,
     cat: guessCategory(text, learned),
     note: isDolarApp ? "DolarApp" : undefined,
+    accountId,
   }
 }

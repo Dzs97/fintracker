@@ -5,7 +5,8 @@ import { parseEntry } from "@/lib/parseEntry"
 import { getSplits, expandInvestment } from "@/lib/splits"
 import { stampNavs } from "@/lib/stampNav"
 import { loadLearned, recordLearned } from "@/lib/learnedCats"
-import type { Expense, Income, CCCharge, Investment } from "@/types"
+import { redis, KEYS } from "@/lib/redis"
+import type { Expense, Income, CCCharge, Investment, Account } from "@/types"
 
 /**
  * POST /api/quick
@@ -29,7 +30,8 @@ export async function POST(req: NextRequest) {
   const text = typeof body?.text === "string" ? body.text : ""
   const dry = !!body?.dry
   const learned = await loadLearned()
-  const parsed = parseEntry(text, learned)
+  const accountsList = (await redis.get<Account[]>(KEYS.accounts)) ?? []
+  const parsed = parseEntry(text, learned, accountsList.map(a => ({ id: a.id, name: a.name })))
 
   if ("error" in parsed) {
     return NextResponse.json({ error: parsed.error, text }, { status: 400 })
@@ -52,13 +54,13 @@ export async function POST(req: NextRequest) {
 
   switch (parsed.entry_type) {
     case "expense": {
-      entry = { id: nanoid(), name: parsed.name, amount: parsed.amount, cat: parsed.cat as Expense["cat"], date: parsed.date, note: parsed.note }
+      entry = { id: nanoid(), name: parsed.name, amount: parsed.amount, cat: parsed.cat as Expense["cat"], date: parsed.date, note: parsed.note, accountId: parsed.accountId }
       await patchState({ expenses: [...state.expenses, entry] })
       void recordLearned(parsed.name, parsed.cat)
       break
     }
     case "income": {
-      entry = { id: nanoid(), name: parsed.name, amount: parsed.amount, date: parsed.date, note: parsed.note }
+      entry = { id: nanoid(), name: parsed.name, amount: parsed.amount, date: parsed.date, note: parsed.note, accountId: parsed.accountId }
       await patchState({ income: [...state.income, entry] })
       break
     }
