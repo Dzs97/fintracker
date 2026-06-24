@@ -4,7 +4,7 @@
 //     fall back to the last cached copy when offline.
 //   - Same-origin /_next/static, /fonts/, /icon.svg → cache-first (immutable).
 //   - /api/* → network only, never cached (data must be fresh).
-const VERSION = "v1"
+const VERSION = "v2"
 const SHELL = `ft-shell-${VERSION}`
 const RUNTIME = `ft-runtime-${VERSION}`
 
