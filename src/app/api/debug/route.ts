@@ -5,5 +5,5 @@ export async function GET() {
   const present = Object.keys(process.env).filter(k =>
     /UPSTASH|KV_|REDIS/.test(k)
   ).sort()
-  return NextResponse.json({ present })
+  return NextResponse.json({ present, marker: "learned-probe-1" })
 }
