@@ -14,6 +14,7 @@ export interface Expense {
   cat: Category
   date: string
   note?: string
+  accountId?: string   // if set, debits this account's live balance
 }
 
 export interface Income {
@@ -22,6 +23,7 @@ export interface Income {
   amount: number  // USD
   date: string
   note?: string
+  accountId?: string   // if set, credits this account's live balance
 }
 
 export interface CCCharge {
@@ -115,6 +117,7 @@ export interface Account {
   balance: number
   kind: "checking" | "savings" | "hysa" | "hsa" | "roth" | "brokerage" | "cash" | "other"
   apr?: number        // optional yield (e.g. OpenBank 13%)
+  openingDate?: string // `balance` is the balance as of this date; tagged txns on/after adjust it
   note?: string
 }
 

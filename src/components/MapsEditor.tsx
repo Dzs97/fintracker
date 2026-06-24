@@ -752,7 +752,10 @@ function AccountsSection({ accounts, setAccounts, smallInp }: {
   const [form, setForm] = useState(blank)
 
   const save = async (a: Partial<Account> & { id?: string }) => {
-    const out = await api<{ entry: Account }>("/api/accounts", "POST", a)
+    // A manually-set balance is "as of now" — stamp openingDate so prior tagged
+    // transactions don't re-apply on top of the corrected figure.
+    const openingDate = new Date().toISOString().split("T")[0]
+    const out = await api<{ entry: Account }>("/api/accounts", "POST", { ...a, openingDate })
     setAccounts(l => { const i = l.findIndex(x => x.id === out.entry.id); return i === -1 ? [...l, out.entry] : l.map(x => x.id === out.entry.id ? out.entry : x) })
   }
   const remove = async (id: string) => { if (!confirm("Remove account?")) return; await api("/api/accounts", "DELETE", { id }); setAccounts(l => l.filter(a => a.id !== id)) }

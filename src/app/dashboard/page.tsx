@@ -120,8 +120,8 @@ export default function Dashboard() {
   const [search, setSearch] = useState({ exp: "", inc: "", cc: "", inv: "" })
 
   const [form, setForm] = useState({
-    expName: "", expAmt: "", expCat: "Food & Dining", expDate: today(), expNote: "",
-    incName: "", incAmt: "", incDate: today(), incNote: "",
+    expName: "", expAmt: "", expCat: "Food & Dining", expDate: today(), expNote: "", expAcct: "",
+    incName: "", incAmt: "", incDate: today(), incNote: "", incAcct: "",
     ccName: "", ccAmt: "", ccDate: today(), ccCat: "Food & Dining", ccCard: "OpenBank" as (typeof CC_CARDS)[number], ccInstallments: 1,
     invName: "", invAmt: "", invDate: today(), invNote: "", invGf: false, invType: "fund" as "fund" | "stock",
   })
@@ -336,9 +336,24 @@ export default function Dashboard() {
   }, 0)
   const investmentPL = investmentValue - investmentCost
 
+  // ── Live account balances: opening balance + tagged txns since openingDate ──
+  // Expenses are MXN, income is USD; normalize each into the account's own currency.
+  const liveAccounts = accounts.map(a => {
+    const since = a.openingDate
+    const within = (d: string) => !since || d >= since
+    let bal = a.balance
+    for (const e of state.expenses) {
+      if (e.accountId === a.id && within(e.date)) bal -= a.currency === "USD" ? e.amount / FX : e.amount
+    }
+    for (const e of state.income) {
+      if (e.accountId === a.id && within(e.date)) bal += a.currency === "USD" ? e.amount : e.amount * FX
+    }
+    return { ...a, balance: bal }
+  })
+
   // ── Live net worth (MXN) — same math as the cron snapshot ──
   // Σ accounts(USD→MXN) + live investment value − card debt.
-  const accountsCashMXN = accounts.reduce((s, a) => s + (a.currency === "USD" ? a.balance * FX : a.balance), 0)
+  const accountsCashMXN = liveAccounts.reduce((s, a) => s + (a.currency === "USD" ? a.balance * FX : a.balance), 0)
   const cardDebtMXN = (state.statements ?? []).reduce((s, st) => s + Math.max(0, (st.totalOwed ?? st.closingBalance) - st.paid), 0)
   const netWorthMXN = accountsCashMXN + investmentValue - cardDebtMXN
 
@@ -381,7 +396,7 @@ export default function Dashboard() {
   const closeForms = () => { setShowForm(false); setQuickAdd(null) }
   const addExpense = async () => {
     if (!form.expName || !form.expAmt) return
-    const entry = { id: `tmp-${Date.now()}`, name: form.expName, amount: parseFloat(form.expAmt), cat: form.expCat as Expense["cat"], date: form.expDate || today(), note: form.expNote }
+    const entry = { id: `tmp-${Date.now()}`, name: form.expName, amount: parseFloat(form.expAmt), cat: form.expCat as Expense["cat"], date: form.expDate || today(), note: form.expNote, accountId: form.expAcct || undefined }
     setState(s => s && ({ ...s, expenses: [...s.expenses, entry] }))
     setForm(f => ({ ...f, expName: "", expAmt: "", expNote: "" }))
     closeForms(); triggerFlash(); buzz()
@@ -389,7 +404,7 @@ export default function Dashboard() {
   }
   const addIncome = async () => {
     if (!form.incName || !form.incAmt) return
-    const entry = { id: `tmp-${Date.now()}`, name: form.incName, amount: parseFloat(form.incAmt), date: form.incDate || today(), note: form.incNote }
+    const entry = { id: `tmp-${Date.now()}`, name: form.incName, amount: parseFloat(form.incAmt), date: form.incDate || today(), note: form.incNote, accountId: form.incAcct || undefined }
     setState(s => s && ({ ...s, income: [...s.income, entry] }))
     setForm(f => ({ ...f, incName: "", incAmt: "", incNote: "" }))
     closeForms(); triggerFlash(); buzz()
@@ -502,6 +517,13 @@ export default function Dashboard() {
       <select style={inp} value={form.expCat} onChange={e => upd("expCat", e.target.value)}>
         {CATS.map(c => <option key={c}>{c}</option>)}
       </select>
+      {accounts.length > 0 && (<>
+        <label style={lbl}>Paid from</label>
+        <select style={inp} value={form.expAcct} onChange={e => upd("expAcct", e.target.value)}>
+          <option value="">— don&apos;t touch balances —</option>
+          {accounts.map(a => <option key={a.id} value={a.id}>{a.name} ({a.currency})</option>)}
+        </select>
+      </>)}
       <label style={lbl}>Note (optional)</label>
       <input style={inp} value={form.expNote} onChange={e => upd("expNote", e.target.value)} placeholder="Optional" />
     </FormSheet>
@@ -514,6 +536,13 @@ export default function Dashboard() {
         <div><label style={lbl}>Amount (USD)</label><input style={inp} type="number" value={form.incAmt} onChange={e => upd("incAmt", e.target.value)} placeholder="0.00" min="0" /></div>
         <div><label style={lbl}>Date</label><input style={inp} type="date" value={form.incDate} onChange={e => upd("incDate", e.target.value)} /></div>
       </div>
+      {accounts.length > 0 && (<>
+        <label style={lbl}>Deposited to</label>
+        <select style={inp} value={form.incAcct} onChange={e => upd("incAcct", e.target.value)}>
+          <option value="">— don&apos;t touch balances —</option>
+          {accounts.map(a => <option key={a.id} value={a.id}>{a.name} ({a.currency})</option>)}
+        </select>
+      </>)}
       <label style={lbl}>Note (optional)</label>
       <input style={inp} value={form.incNote} onChange={e => upd("incNote", e.target.value)} placeholder="Optional" />
     </FormSheet>
@@ -588,7 +617,7 @@ export default function Dashboard() {
             prevMoName={prevDate.toLocaleString("en-US", { month: "long" })}
             prevIncMXN={prevIncMXN}
             onNavigate={handleHomeNav}
-            accounts={accounts}
+            accounts={liveAccounts}
             goals={goals}
             cardDebtMXN={cardDebtMXN}
             nwHistory={nwHistory}

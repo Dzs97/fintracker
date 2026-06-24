@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const { id, amount, paidOn, note } = await req.json()
+  const { id, amount, paidOn, note, accountId } = await req.json()
   if (!id || !amount || amount <= 0) {
     return NextResponse.json({ error: "missing id or amount" }, { status: 400 })
   }
@@ -59,6 +59,7 @@ export async function PATCH(req: NextRequest) {
     cat: "Card Payments",
     date,
     note: note ?? "statement payment",
+    accountId: accountId ?? undefined,
   }
   // 2) update the statement's paid total
   const updated: Statement = { ...stmt, paid: stmt.paid + Number(amount) }

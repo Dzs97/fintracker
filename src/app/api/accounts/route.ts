@@ -18,6 +18,7 @@ export async function POST(req: NextRequest) {
     balance: Number(body.balance) || 0,
     kind: body.kind ?? "other",
     apr: body.apr != null ? Number(body.apr) : undefined,
+    openingDate: body.openingDate ?? undefined,
     note: body.note,
   }
   const idx = list.findIndex(a => a.id === entry.id)
