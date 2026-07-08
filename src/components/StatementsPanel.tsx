@@ -3,7 +3,7 @@ import { useState } from "react"
 import { C, CC_CARDS, fmt, fmtDate } from "@/lib/utils"
 import { Card, Label, inp, lbl, ToggleRow } from "./ui"
 import { Icon } from "./Icon"
-import { cycleWindowForPeriod, type CardConfig } from "@/lib/cardCycles"
+import { cycleWindowForPeriod, computeCycle, partitionByCycle, fmtDueLabel, type CardConfig } from "@/lib/cardCycles"
 import type { Statement, CCCharge } from "@/types"
 
 interface Props {
@@ -26,6 +26,9 @@ async function api<T>(path: string, method: string, body?: unknown): Promise<T> 
 function todayStr() { return new Date().toISOString().split("T")[0] }
 function thisPeriod() {
   const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
+}
+function periodOf(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
 }
 
@@ -74,6 +77,35 @@ export function StatementsPanel({ statements, ccExpanded, cardConfig, reload }: 
     await api("/api/statements", "DELETE", { id })
     await reload()
   }
+
+  // Pre-fill the add form for a card+period whose statement hasn't been entered yet
+  const openEntryFor = (card: string, period: string, dueOn: string, estimate: number) => {
+    setForm(f => ({
+      ...f,
+      card: card as (typeof CC_CARDS)[number],
+      period,
+      dueOn,
+      closingBalance: estimate > 0 ? estimate.toFixed(2) : "",
+      totalOwed: "", pagoMinimo: "", paid: "", notes: "",
+    }))
+    setAdding(true)
+  }
+
+  // Live "Pending Statement" line per card: the most recent closed cycle that
+  // doesn't have a real (closing > 0) statement entered yet. Derived from cycle
+  // config — no empty placeholders stored.
+  const pending = CC_CARDS.map(card => {
+    const cfg = cardConfig[card]
+    if (!cfg) return null
+    const cycle = computeCycle(cfg)
+    const period = periodOf(cycle.lastCutoff)
+    const entered = statements.some(s => s.card === card && s.period === period && s.closingBalance > 0)
+    if (entered) return null
+    const charges = ccExpanded.filter(c => c.card === card)
+    const estimate = partitionByCycle(charges, cycle).statement.reduce((sum, c) => sum + c.amount, 0)
+    const dueOn = cycle.statementDue.toISOString().split("T")[0]
+    return { card, period, estimate, dueOn, daysUntilDue: cycle.daysUntilDue }
+  }).filter(Boolean) as Array<{ card: string; period: string; estimate: number; dueOn: string; daysUntilDue: number }>
 
   // Sort: oldest unpaid first, then newest paid-off
   const sorted = [...statements].sort((a, b) => {
@@ -156,10 +188,47 @@ export function StatementsPanel({ statements, ccExpanded, cardConfig, reload }: 
         </div>
       )}
 
-      {sorted.length === 0 ? (
-        <div style={{ fontSize: 12, color: C.dim, padding: "12px 0" }}>
-          No statements yet. Add one to track pre-app balances or month-specific payments.
+      {/* Pending statements — one per card whose current cycle isn't entered yet */}
+      {pending.map(p => (
+        <div key={"pending-" + p.card} style={{ padding: "12px 0", borderBottom: `1px solid ${C.border}` }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
+                <span style={{ fontSize: 13.5, fontWeight: 700, color: C.amber }}>{p.card}</span>
+                <span style={{ fontSize: 11.5, color: C.muted }}>{p.period}</span>
+                <span style={{ fontSize: 9.5, fontWeight: 700, color: C.blue, background: C.blueDim, padding: "2px 7px", borderRadius: 6, letterSpacing: "0.05em" }}>PENDING</span>
+              </div>
+              <div style={{ fontSize: 11, color: C.muted }}>
+                Awaiting your bank&apos;s numbers · {fmtDueLabel(p.daysUntilDue)}
+              </div>
+              {p.estimate > 0 && (
+                <div style={{ fontSize: 10.5, color: C.dim, marginTop: 2 }}>
+                  Logged so far <span style={{ color: C.muted }}>{fmt(p.estimate)}</span>
+                </div>
+              )}
+            </div>
+            <div style={{ textAlign: "right", flexShrink: 0 }}>
+              <div style={{ fontSize: 17, fontWeight: 700, color: C.dim }}>—</div>
+              <div style={{ fontSize: 10, color: C.dim, marginTop: 1 }}>not entered</div>
+            </div>
+          </div>
+          <button onClick={() => openEntryFor(p.card, p.period, p.dueOn, p.estimate)} style={{
+            marginTop: 10, padding: "7px 14px", fontSize: 11.5, fontWeight: 700, border: `1px solid ${C.blue}55`, borderRadius: 10,
+            cursor: "pointer", background: C.blue + "1F", color: C.blue, fontFamily: "inherit",
+            display: "inline-flex", alignItems: "center", gap: 5,
+          }}>
+            <Icon name="plus" size={12} color={C.blue} />
+            Enter statement
+          </button>
         </div>
+      ))}
+
+      {sorted.length === 0 ? (
+        pending.length === 0 && (
+          <div style={{ fontSize: 12, color: C.dim, padding: "12px 0" }}>
+            No statements yet. Add one to track pre-app balances or month-specific payments.
+          </div>
+        )
       ) : sorted.map(s => {
         const remaining = Math.max(0, s.closingBalance - s.paid)
         const fullyPaid = remaining === 0

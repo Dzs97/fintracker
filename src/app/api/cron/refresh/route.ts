@@ -8,7 +8,7 @@ import { getFxRate } from "@/lib/fx"
 import { applyFxConfig, getFxConfig } from "@/lib/fxConfig"
 import { nanoid } from "@/lib/utils"
 import type {
-  Statement, Recurring, FutureObligation, Expense, Income, CCCharge, Investment,
+  Recurring, FutureObligation, Expense, Income, CCCharge, Investment,
   Account, NwSnapshot,
 } from "@/types"
 
@@ -47,33 +47,11 @@ function periodOf(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
 }
 
-async function autoCreateStatements(now: Date): Promise<Array<{ card: string; period: string }>> {
-  const cfg = (await redis.get<Record<string, CardConfig>>(KEYS.cardConfig)) ?? {}
-  const state = await getState()
-  const list = state.statements ?? []
-  const created: Array<{ card: string; period: string }> = []
-  let dirty = false
-  for (const [card, c] of Object.entries(cfg)) {
-    const cycle = computeCycle(c, now)
-    const period = periodOf(cycle.lastCutoff)
-    const exists = list.some(s => s.card === card && s.period === period)
-    if (!exists && now >= cycle.lastCutoff) {
-      const placeholder: Statement = {
-        id: nanoid(),
-        card,
-        period,
-        closingBalance: 0,
-        paid: 0,
-        dueOn: cycle.statementDue.toISOString().split("T")[0],
-        notes: "Auto-created at cutoff. Fill in closingBalance + pagoMinimo from your bank statement.",
-      }
-      list.push(placeholder)
-      created.push({ card, period })
-      dirty = true
-    }
-  }
-  if (dirty) await patchState({ statements: list })
-  return created
+async function autoCreateStatements(_now: Date): Promise<Array<{ card: string; period: string }>> {
+  // Disabled: we no longer persist empty $0 placeholder statements at cutoff.
+  // The Cards view now derives a live "Pending Statement" line per card from the
+  // cycle config (see StatementsPanel), so there's nothing to pre-create here.
+  return []
 }
 
 async function fireRecurring(now: Date): Promise<Array<{ name: string; type: string; amount: number }>> {
