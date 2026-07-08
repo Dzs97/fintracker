@@ -354,7 +354,15 @@ export default function Dashboard() {
   // ── Live net worth (MXN) — same math as the cron snapshot ──
   // Σ accounts(USD→MXN) + live investment value − card debt.
   const accountsCashMXN = liveAccounts.reduce((s, a) => s + (a.currency === "USD" ? a.balance * FX : a.balance), 0)
-  const cardDebtMXN = (state.statements ?? []).reduce((s, st) => s + Math.max(0, (st.totalOwed ?? st.closingBalance) - st.paid), 0)
+  // Only the latest statement per card counts — its totalOwed already rolls in the
+  // full remaining debt (MSI tail + current), so older statements would double-count.
+  const latestStmtPeriod: Record<string, string> = {}
+  for (const st of state.statements ?? []) {
+    if (!latestStmtPeriod[st.card] || st.period > latestStmtPeriod[st.card]) latestStmtPeriod[st.card] = st.period
+  }
+  const cardDebtMXN = (state.statements ?? [])
+    .filter(st => st.period === latestStmtPeriod[st.card])
+    .reduce((s, st) => s + Math.max(0, (st.totalOwed ?? st.closingBalance) - st.paid), 0)
   const netWorthMXN = accountsCashMXN + investmentValue - cardDebtMXN
 
   const invByName: Record<string, { name: string; gf: boolean; cost: number; shares: number }> = {}

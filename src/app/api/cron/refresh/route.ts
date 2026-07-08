@@ -199,8 +199,15 @@ async function snapshotNetWorth(now: Date): Promise<NwSnapshot> {
     return s + e.amount
   }, 0)
 
-  const cardDebtMXN = (state.statements ?? []).reduce(
-    (s, st) => s + Math.max(0, (st.totalOwed ?? st.closingBalance) - st.paid), 0)
+  // Latest statement per card only — totalOwed already includes the full remaining
+  // debt, so counting older statements too would double-count the MSI tail.
+  const latestStmtPeriod: Record<string, string> = {}
+  for (const st of state.statements ?? []) {
+    if (!latestStmtPeriod[st.card] || st.period > latestStmtPeriod[st.card]) latestStmtPeriod[st.card] = st.period
+  }
+  const cardDebtMXN = (state.statements ?? [])
+    .filter(st => st.period === latestStmtPeriod[st.card])
+    .reduce((s, st) => s + Math.max(0, (st.totalOwed ?? st.closingBalance) - st.paid), 0)
 
   const mxn = cashMXN + investmentValueMXN - cardDebtMXN
   const usd = fx > 0 ? mxn / fx : 0
