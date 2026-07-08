@@ -5,5 +5,5 @@ export async function GET() {
   const present = Object.keys(process.env).filter(k =>
     /UPSTASH|KV_|REDIS/.test(k)
   ).sort()
-  return NextResponse.json({ present, build: "carddebt-latest-per-card" })
+  return NextResponse.json({ present, build: "msi-expand" })
 }

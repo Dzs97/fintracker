@@ -54,6 +54,7 @@ export default function Dashboard() {
   const [refreshing, setRefreshing] = useState(false)
   const [heroFlash, setHeroFlash] = useState(false)
   const [showForm, setShowForm] = useState(false)
+  const [msiOpen, setMsiOpen] = useState(false)
   const [quickAdd, setQuickAdd] = useState<null | "expense" | "income" | "cc" | "investment">(null)
   const [activeInvTab, setActiveInvTab] = useState<"portfolio" | "pl" | "history" | "maps">("portfolio")
   const [tickers, setTickers] = useState<Record<string, string>>({})
@@ -743,11 +744,17 @@ export default function Dashboard() {
                 d.setMonth(d.getMonth() + i)
                 return d.toLocaleString("en-US", { month: "short" })
               })
+              const monthsLong = Array.from({ length: HORIZON }, (_, i) => {
+                const d = new Date()
+                d.setMonth(d.getMonth() + i)
+                return d.toLocaleString("en-US", { month: "long", year: "numeric" })
+              })
+              const lastMonthIdx = totalByMonth.reduce((last, v, i) => v > 0.5 ? i : last, 0)
               return (
-                <div style={{
+                <div onClick={() => { buzz(); setMsiOpen(v => !v) }} style={{
                   background: C.card, border: `1px solid ${C.border}`,
                   borderRadius: 22, padding: "18px 18px 16px", marginBottom: 16,
-                  position: "relative", overflow: "hidden",
+                  position: "relative", overflow: "hidden", cursor: "pointer",
                 }}>
                   <div style={{
                     position: "absolute", top: -50, right: -40, width: 160, height: 160, borderRadius: "50%",
@@ -757,7 +764,13 @@ export default function Dashboard() {
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 12 }}>
                       <div>
                         <div style={{ fontSize: 10.5, color: C.muted, textTransform: "uppercase", letterSpacing: "0.14em", fontWeight: 700 }}>Locked-in MSI</div>
-                        <div style={{ fontSize: 11, color: C.dim, marginTop: 4 }}>next {HORIZON} months</div>
+                        <div style={{ fontSize: 11, color: C.dim, marginTop: 4, display: "inline-flex", alignItems: "center", gap: 5 }}>
+                          next {HORIZON} months
+                          <span style={{ display: "inline-flex", transform: msiOpen ? "rotate(-90deg)" : "rotate(90deg)", transition: "transform 200ms" }}>
+                            <Icon name="chevR" size={12} color={C.muted} />
+                          </span>
+                          <span style={{ color: C.dim }}>{msiOpen ? "hide" : "tap for months"}</span>
+                        </div>
                       </div>
                       <div style={{ textAlign: "right" }}>
                         <div style={{ fontSize: 22, fontWeight: 800, color: C.amber, letterSpacing: "-0.6px", fontVariantNumeric: "tabular-nums" }}>
@@ -799,6 +812,26 @@ export default function Dashboard() {
                         </div>
                       ))}
                     </div>
+
+                    {/* Tap-to-expand: month-by-month breakdown */}
+                    {msiOpen && (
+                      <div style={{ marginTop: 14, borderTop: `1px solid ${C.border}`, paddingTop: 6 }}>
+                        {totalByMonth.map((v, i) => v > 0.5 ? (
+                          <div key={i} style={{
+                            display: "flex", justifyContent: "space-between", alignItems: "baseline",
+                            padding: "8px 0", borderBottom: i < lastMonthIdx ? `1px solid ${C.border}` : "none",
+                          }}>
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                              <span style={{ fontSize: 12.5, fontWeight: 700, color: i === 0 ? C.amber : C.text }}>{monthsLong[i]}</span>
+                              <span style={{ fontSize: 10, color: C.dim, marginLeft: 8 }}>
+                                {Object.entries(byCard).filter(([, arr]) => arr[i] > 0.5).map(([c]) => c).join(" · ")}
+                              </span>
+                            </div>
+                            <span style={{ fontSize: 13, fontWeight: 700, color: i === 0 ? C.amber : C.text, fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>{fmt(v)}</span>
+                          </div>
+                        ) : null)}
+                      </div>
+                    )}
                   </div>
                 </div>
               )
