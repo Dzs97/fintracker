@@ -5,5 +5,5 @@ export async function GET() {
   const present = Object.keys(process.env).filter(k =>
     /UPSTASH|KV_|REDIS/.test(k)
   ).sort()
-  return NextResponse.json({ present, build: "transfer-cat" })
+  return NextResponse.json({ present, build: "breakdown-skip-cardpay" })
 }

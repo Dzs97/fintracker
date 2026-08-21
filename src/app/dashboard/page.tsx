@@ -238,6 +238,9 @@ export default function Dashboard() {
   // Categories that are NOT consumption — transfers between own accounts, ATM/cash
   // withdrawals — excluded from spending totals and the breakdown.
   const NON_SPEND = new Set(["Transfer"])
+  // Category breakdown also skips Card Payments — they're settling itemized CC
+  // charges that are already counted by category (else every purchase double-counts).
+  const BREAKDOWN_SKIP = new Set(["Transfer", "Card Payments"])
   const totalExpMXN  = monthExp.filter(e => !NON_SPEND.has(e.cat)).reduce((s, e) => s + e.amount, 0)
   const totalIncUSD  = monthInc.reduce((s, e) => s + e.amount, 0)
   const totalIncMXN  = totalIncUSD * FX
@@ -264,8 +267,8 @@ export default function Dashboard() {
   const deltaColor = cashDelta === null ? C.muted : cashDelta >= 0 ? C.green : C.red
 
   const catTotals: Record<string, number> = {}
-  monthExp.forEach(e => { if (!NON_SPEND.has(e.cat)) catTotals[e.cat] = (catTotals[e.cat] ?? 0) + e.amount })
-  monthCC.forEach(e  => { if (!NON_SPEND.has(e.cat)) catTotals[e.cat] = (catTotals[e.cat] ?? 0) + e.amount })
+  monthExp.forEach(e => { if (!BREAKDOWN_SKIP.has(e.cat)) catTotals[e.cat] = (catTotals[e.cat] ?? 0) + e.amount })
+  monthCC.forEach(e  => { if (!BREAKDOWN_SKIP.has(e.cat)) catTotals[e.cat] = (catTotals[e.cat] ?? 0) + e.amount })
   const catGrand = Object.values(catTotals).reduce((s, v) => s + v, 0)
 
   // Previous-month totals per category for delta display
@@ -302,7 +305,7 @@ export default function Dashboard() {
     const periodExp = state.expenses.filter(e => { const d = new Date(e.date); return d.getMonth() === p.m && d.getFullYear() === p.y })
     const periodCC  = ccExpanded.filter(e => { const d = new Date(e.date); return d.getMonth() === p.m && d.getFullYear() === p.y })
     for (const e of [...periodExp, ...periodCC]) {
-      if (NON_SPEND.has(e.cat)) continue
+      if (BREAKDOWN_SKIP.has(e.cat)) continue
       if (!catSeries[e.cat]) catSeries[e.cat] = Array(6).fill(0)
       catSeries[e.cat][i] += e.amount
     }
