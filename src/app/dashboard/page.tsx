@@ -235,7 +235,10 @@ export default function Dashboard() {
   const monthInv = state.investments.filter(e => inMonth(e.date))
   const monthCC  = ccExpanded.filter(e => inMonth(e.date))
 
-  const totalExpMXN  = monthExp.reduce((s, e) => s + e.amount, 0)
+  // Categories that are NOT consumption — transfers between own accounts, ATM/cash
+  // withdrawals — excluded from spending totals and the breakdown.
+  const NON_SPEND = new Set(["Transfer"])
+  const totalExpMXN  = monthExp.filter(e => !NON_SPEND.has(e.cat)).reduce((s, e) => s + e.amount, 0)
   const totalIncUSD  = monthInc.reduce((s, e) => s + e.amount, 0)
   const totalIncMXN  = totalIncUSD * FX
   const totalInvAllTime = state.investments.reduce((s, e) => s + e.amount, 0)
@@ -243,7 +246,7 @@ export default function Dashboard() {
   const monthCCTotal = monthCC.reduce((s, e) => s + e.amount, 0)
 
   const prevIncMXN = state.income.filter(e => inPrevMonth(e.date)).reduce((s, e) => s + e.amount * FX, 0)
-  const prevExpMXN = state.expenses.filter(e => inPrevMonth(e.date)).reduce((s, e) => s + e.amount, 0)
+  const prevExpMXN = state.expenses.filter(e => inPrevMonth(e.date) && !NON_SPEND.has(e.cat)).reduce((s, e) => s + e.amount, 0)
   const prevInvMXN = state.investments.filter(e => inPrevMonth(e.date) && !e.historical).reduce((s, e) => s + e.amount, 0)
   const prevCash = prevIncMXN - prevExpMXN - prevInvMXN
 
@@ -261,8 +264,8 @@ export default function Dashboard() {
   const deltaColor = cashDelta === null ? C.muted : cashDelta >= 0 ? C.green : C.red
 
   const catTotals: Record<string, number> = {}
-  monthExp.forEach(e => { catTotals[e.cat] = (catTotals[e.cat] ?? 0) + e.amount })
-  monthCC.forEach(e  => { catTotals[e.cat] = (catTotals[e.cat] ?? 0) + e.amount })
+  monthExp.forEach(e => { if (!NON_SPEND.has(e.cat)) catTotals[e.cat] = (catTotals[e.cat] ?? 0) + e.amount })
+  monthCC.forEach(e  => { if (!NON_SPEND.has(e.cat)) catTotals[e.cat] = (catTotals[e.cat] ?? 0) + e.amount })
   const catGrand = Object.values(catTotals).reduce((s, v) => s + v, 0)
 
   // Previous-month totals per category for delta display
@@ -299,6 +302,7 @@ export default function Dashboard() {
     const periodExp = state.expenses.filter(e => { const d = new Date(e.date); return d.getMonth() === p.m && d.getFullYear() === p.y })
     const periodCC  = ccExpanded.filter(e => { const d = new Date(e.date); return d.getMonth() === p.m && d.getFullYear() === p.y })
     for (const e of [...periodExp, ...periodCC]) {
+      if (NON_SPEND.has(e.cat)) continue
       if (!catSeries[e.cat]) catSeries[e.cat] = Array(6).fill(0)
       catSeries[e.cat][i] += e.amount
     }
