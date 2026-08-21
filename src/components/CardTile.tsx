@@ -113,7 +113,7 @@ const DEFAULT_STYLE: CardStyle = {
 interface Props {
   card: string
   cfg: CardConfig | undefined
-  pool: number               // total unsettled MXN pool for this card
+  pool: number               // total still owed on this card (latest statement: totalOwed − paid)
   currentCycleTotal: number  // charges in the open (post-cutoff) cycle
   statementBalance: number   // unpaid balance from the closed cycle (statement.closingBalance - statement.paid)
   statement: Statement | undefined  // current statement (matching the closed cycle period)
@@ -229,10 +229,10 @@ export function CardTile({ card, cfg, pool, currentCycleTotal, statementBalance,
             {statement && statement.paid > 0 ? "Remaining" : "Owed"}
           </div>
           <div style={{ fontSize: 19, fontWeight: 800, color: overdue ? C.red : urgent ? C.amber : C.text, letterSpacing: "-0.5px", marginTop: 2, fontVariantNumeric: "tabular-nums" }}>
-            {fmt(statement ? remaining : pool)} <span style={{ fontSize: 10, color: C.muted, fontWeight: 500 }}>MXN</span>
+            {fmt(pool)} <span style={{ fontSize: 10, color: C.muted, fontWeight: 500 }}>MXN</span>
           </div>
           {statement && statement.paid > 0 && (
-            <div style={{ fontSize: 9.5, color: C.dim, marginTop: 2, fontVariantNumeric: "tabular-nums" }}>paid {fmt(statement.paid)} of {fmt(statement.closingBalance)}</div>
+            <div style={{ fontSize: 9.5, color: C.dim, marginTop: 2, fontVariantNumeric: "tabular-nums" }}>paid {fmt(statement.paid)} of {fmt(statement.totalOwed ?? statement.closingBalance)}</div>
           )}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -351,18 +351,6 @@ export function CardTile({ card, cfg, pool, currentCycleTotal, statementBalance,
                     Any partial works — remaining stays on this statement until paid or next cutoff rolls it.
                   </div>
                 </div>
-              )}
-
-              {/* Settle all (full pool, includes any carry-over) */}
-              {pool > 0 && (
-                <button onClick={onSettle} style={{
-                  width: "100%", padding: "11px 14px", fontSize: 12, fontFamily: "inherit", fontWeight: 700,
-                  border: `1px solid ${C.border}`, borderRadius: 12, cursor: "pointer",
-                  background: "transparent", color: C.muted,
-                  display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
-                }}>
-                  Settle full pool · {fmt(pool)}
-                </button>
               )}
 
               {statement?.dueOn && (

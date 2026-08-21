@@ -253,10 +253,17 @@ export default function Dashboard() {
   const prevInvMXN = state.investments.filter(e => inPrevMonth(e.date) && !e.historical).reduce((s, e) => s + e.amount, 0)
   const prevCash = prevIncMXN - prevExpMXN - prevInvMXN
 
+  // Per-card debt = the latest statement's remaining (totalOwed incl. MSI/deferred
+  // tail − paid). state.cc now holds MONTHS of itemized history, so its raw sum is
+  // gross spending, not debt — statements are the source of truth for what's owed.
+  const latestPeriodByCard: Record<string, string> = {}
+  for (const st of state.statements ?? []) {
+    if (!latestPeriodByCard[st.card] || st.period > latestPeriodByCard[st.card]) latestPeriodByCard[st.card] = st.period
+  }
   const ccPoolByCard: Record<string, number> = {}
   CC_CARDS.forEach(card => {
-    const raw = state.cc.filter(e => e.card === card).reduce((s, e) => s + e.amount, 0)
-    ccPoolByCard[card] = Math.max(0, raw - (state.settled[card] ?? 0))
+    const st = (state.statements ?? []).find(s => s.card === card && s.period === latestPeriodByCard[card])
+    ccPoolByCard[card] = st ? Math.max(0, (st.totalOwed ?? st.closingBalance) - st.paid) : 0
   })
   const ccPoolTotal = Object.values(ccPoolByCard).reduce((s, v) => s + v, 0)
   const currentCash = totalIncMXN - totalExpMXN - monthInvMXN
