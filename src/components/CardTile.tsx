@@ -139,7 +139,9 @@ export function CardTile({ card, cfg, pool, currentCycleTotal, statementBalance,
   // Remaining owed THIS statement: prefer the paid-aware statement balance so a
   // fully-paid statement never reads as due/overdue. Falls back to the raw pool.
   const remaining = statement ? Math.max(0, statement.closingBalance - statement.paid) : statementBalance
-  const settled = remaining <= 0.01
+  // Tolerate sub-peso rounding crumbs (e.g. paid 4,239 vs closing 4,239.22) so a
+  // statement paid in full still reads as settled rather than perpetually "due".
+  const settled = remaining < 1
   const overdue = cycle ? cycle.overdue && !settled : false
   const urgent = cycle ? cycle.daysUntilDue <= 3 && !settled : false
 
