@@ -368,9 +368,9 @@ export default function Dashboard() {
   for (const st of state.statements ?? []) {
     if (!latestStmtPeriod[st.card] || st.period > latestStmtPeriod[st.card]) latestStmtPeriod[st.card] = st.period
   }
-  const cardDebtMXN = (state.statements ?? [])
-    .filter(st => st.period === latestStmtPeriod[st.card])
-    .reduce((s, st) => s + Math.max(0, (st.totalOwed ?? st.closingBalance) - st.paid), 0)
+  const latestStmts = (state.statements ?? []).filter(st => st.period === latestStmtPeriod[st.card])
+  const cardDebtMXN = latestStmts.reduce((s, st) => s + Math.max(0, (st.totalOwed ?? st.closingBalance) - st.paid), 0)
+  const cardsWithDebt = latestStmts.filter(st => ((st.totalOwed ?? st.closingBalance) - st.paid) > 1).length
   const netWorthMXN = accountsCashMXN + investmentValue - cardDebtMXN
 
   const invByName: Record<string, { name: string; gf: boolean; cost: number; shares: number }> = {}
@@ -681,13 +681,13 @@ export default function Dashboard() {
               }} />
               <div style={{ position: "relative" }}>
                 <div style={{ fontSize: 10.5, color: C.muted, textTransform: "uppercase", letterSpacing: "0.14em", fontWeight: 700, marginBottom: 8 }}>
-                  Total unpaid pool
+                  Total card debt
                 </div>
                 <div style={{ fontSize: 40, fontWeight: 800, color: C.amber, letterSpacing: "-1.5px", lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>
-                  {fmt(ccPoolTotal)}<span style={{ fontSize: 14, fontWeight: 500, color: C.muted, marginLeft: 8 }}>MXN</span>
+                  {fmt(cardDebtMXN)}<span style={{ fontSize: 14, fontWeight: 500, color: C.muted, marginLeft: 8 }}>MXN</span>
                 </div>
                 <div style={{ fontSize: 11, color: C.dim, marginTop: 8 }}>
-                  across {CC_CARDS.filter(c => (ccPoolByCard[c] ?? 0) > 0).length} card{CC_CARDS.filter(c => (ccPoolByCard[c] ?? 0) > 0).length !== 1 ? "s" : ""}
+                  across {cardsWithDebt} card{cardsWithDebt !== 1 ? "s" : ""} · from statements (MSI + deferred)
                 </div>
               </div>
             </div>
