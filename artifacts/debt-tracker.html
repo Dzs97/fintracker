@@ -1,0 +1,278 @@
+<title>Debt Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+:root{
+  --bg:#f6f4f0; --surface:#ffffff; --card:#ffffff; --border:#e7e2d9; --border-strong:#d8d2c6;
+  --text:#1b1813; --muted:#6c665c; --dim:#98918456;
+  --debt:#b45309; --debt-bg:#fbe4d0; --danger:#b3261e; --danger-bg:#f8ddd9;
+  --good:#1f7a44; --good-bg:#d9efdf; --accent:#b45309;
+  --ring:0 0 0 3px #b4530933;
+}
+:root:not([data-theme="light"]){}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#141210; --surface:#1d1a16; --card:#1d1a16; --border:#2f2a23; --border-strong:#3d372e;
+  --text:#f1ede6; --muted:#9c948a; --dim:#5a53497a;
+  --debt:#f59e0b; --debt-bg:#3a2a10; --danger:#f0857c; --danger-bg:#3a1a16;
+  --good:#57cc82; --good-bg:#14301f; --accent:#f59e0b; --ring:0 0 0 3px #f59e0b44;
+}}
+:root[data-theme="dark"]{
+  --bg:#141210; --surface:#1d1a16; --card:#1d1a16; --border:#2f2a23; --border-strong:#3d372e;
+  --text:#f1ede6; --muted:#9c948a; --dim:#5a53497a;
+  --debt:#f59e0b; --debt-bg:#3a2a10; --danger:#f0857c; --danger-bg:#3a1a16;
+  --good:#57cc82; --good-bg:#14301f; --accent:#f59e0b; --ring:0 0 0 3px #f59e0b44;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:"IBM Plex Sans",system-ui,sans-serif;line-height:1.5}
+.wrap{max-width:820px;margin:0 auto;padding-block:28px;padding-left:18px;padding-right:18px}
+.mono{font-family:"IBM Plex Mono","IBM Plex Sans",monospace;font-variant-numeric:tabular-nums}
+h1{font-size:22px;font-weight:600;margin:0;letter-spacing:-.01em}
+.eyebrow{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:22px;flex-wrap:wrap}
+.hero{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:22px 24px;margin-bottom:16px}
+.hero .big{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;font-size:44px;font-weight:600;letter-spacing:-.02em;color:var(--debt);line-height:1.05}
+.hero .sub{font-size:13.5px;color:var(--muted);margin-top:6px}
+.eta{margin-top:16px;padding-top:15px;border-top:1px solid var(--border);display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.eta b{font-family:"IBM Plex Mono",monospace;color:var(--good);font-weight:600;font-size:19px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:16px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px 17px}
+.card .lbl{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.card .name{font-weight:600;font-size:14.5px}
+.card .rate{font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px}
+.rate.hot{background:var(--danger-bg);color:var(--danger)}
+.rate.warm{background:var(--debt-bg);color:var(--debt)}
+.rate.cool{background:var(--good-bg);color:var(--good)}
+.card .amt{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;font-size:24px;font-weight:600;margin-top:8px;letter-spacing:-.01em}
+.card .note{font-size:11.5px;color:var(--muted);margin-top:3px}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px 22px;margin-bottom:16px}
+.section h2{font-size:15px;font-weight:600;margin:0 0 3px}
+.section .desc{font-size:12.5px;color:var(--muted);margin:0 0 16px}
+.bleed-row{display:flex;justify-content:space-between;align-items:baseline;padding:9px 0;border-bottom:1px dashed var(--border)}
+.bleed-row:last-child{border-bottom:none}
+.bleed-row .v{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;font-weight:500}
+.bleed-total{color:var(--danger);font-weight:600}
+.inc-list{display:flex;flex-direction:column;gap:2px}
+.inc-row{display:flex;justify-content:space-between;align-items:baseline;padding:8px 0;border-bottom:1px dashed var(--border)}
+.inc-row .who{font-weight:500;font-size:14px}
+.inc-row .meta{font-size:11.5px;color:var(--muted);margin-left:8px;font-weight:400}
+.inc-row .v{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;font-weight:500}
+.inc-total{border-bottom:none!important;padding-top:12px;margin-top:4px;border-top:2px solid var(--border);font-weight:600}
+.inc-total .v{color:var(--good);font-size:17px}
+.slider-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}
+.slider-head .val{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;font-size:20px;font-weight:600;color:var(--accent)}
+input[type=range]{width:100%;height:6px;-webkit-appearance:none;appearance:none;background:var(--border-strong);border-radius:6px;outline:none;margin:4px 0 6px}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;border-radius:50%;background:var(--accent);cursor:pointer;border:3px solid var(--surface);box-shadow:0 0 0 1px var(--accent)}
+input[type=range]::-moz-range-thumb{width:20px;height:20px;border-radius:50%;background:var(--accent);cursor:pointer;border:3px solid var(--surface)}
+input[type=range]:focus-visible{box-shadow:var(--ring)}
+.range-ends{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);font-family:"IBM Plex Mono",monospace}
+.calc-out{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:18px}
+.stat{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:13px 15px}
+.stat .k{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.stat .n{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;font-size:22px;font-weight:600;margin-top:4px}
+.stat.affordable .n{color:var(--good)}
+.callout{font-size:12.5px;color:var(--muted);margin-top:14px;padding:11px 13px;background:var(--bg);border-radius:10px;border-left:3px solid var(--accent)}
+.prog-track{height:14px;background:var(--border-strong);border-radius:20px;overflow:hidden;margin:12px 0 8px}
+.prog-fill{height:100%;background:linear-gradient(90deg,var(--good),var(--good));border-radius:20px;transition:width .3s ease}
+.prog-meta{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);font-family:"IBM Plex Mono",monospace}
+.prog-input{display:flex;gap:8px;align-items:center;margin-top:14px}
+.prog-input label{font-size:12.5px;color:var(--muted)}
+.prog-input input{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;width:130px;padding:8px 10px;border:1px solid var(--border-strong);border-radius:9px;background:var(--card);color:var(--text);font-size:14px}
+.prog-input input:focus-visible{outline:none;box-shadow:var(--ring);border-color:var(--accent)}
+.foot{font-size:11.5px;color:var(--muted);text-align:center;margin-top:8px;line-height:1.7}
+.tag{display:inline-block;font-size:10.5px;font-weight:600;letter-spacing:.04em;padding:2px 9px;border-radius:20px;background:var(--debt-bg);color:var(--debt)}
+.ledger-head{display:grid;grid-template-columns:58px 1fr auto 92px;gap:8px;padding:7px 4px;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-weight:600;border-bottom:1px solid var(--border)}
+.ledger-row{display:grid;grid-template-columns:58px 1fr auto 92px;gap:8px;padding:8px 4px;align-items:center;font-size:12.5px;border-bottom:1px dashed var(--border)}
+.ledger-row:last-child{border-bottom:none}
+.ledger-row .d{color:var(--muted);font-size:11.5px}
+</style>
+
+<div class="wrap">
+  <div class="head">
+    <div>
+      <div class="eyebrow">Diego · card debt</div>
+      <h1>Debt Tracker</h1>
+    </div>
+    <div style="text-align:right"><div class="eyebrow">As of</div><div class="mono" style="font-size:14px;font-weight:500">Sep 14, 2026</div></div>
+  </div>
+
+  <div class="hero">
+    <div class="eyebrow" style="margin-bottom:8px">Total card debt</div>
+    <div class="big mono">$146,156 <span style="font-size:16px;color:var(--muted);font-weight:500">MXN</span></div>
+    <div class="sub">≈ $8,623 USD · of which <b style="color:var(--debt)">$119,011</b> is interest/commission-bearing (the part that hurts) and $27,145 is 0% MSI that amortizes on its own.</div>
+    <div class="eta">
+      <span style="font-size:13px;color:var(--muted)">Kill the expensive debt in</span>
+      <b id="eta-months">—</b>
+      <span style="font-size:13px;color:var(--muted)" id="eta-date"></span>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <div class="lbl"><span class="name">Amex Platinum</span><span class="rate hot">~40%/yr</span></div>
+      <div class="amt">$119,485</div>
+      <div class="note">Deferred principal · $5,818/mo commission · growing</div>
+    </div>
+    <div class="card">
+      <div class="lbl"><span class="name">Invex Volaris</span><span class="rate warm">mixed</span></div>
+      <div class="amt">$18,703</div>
+      <div class="note">Konfio $3.4k @ 43.9% · IKEA 0% MSI</div>
+    </div>
+    <div class="card">
+      <div class="lbl"><span class="name">OpenBank</span><span class="rate cool">low</span></div>
+      <div class="amt">$7,968</div>
+      <div class="note">Small MSI tail · Aug statement</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Monthly bleed</h2>
+    <p class="desc">Pure commissions + interest — money gone before a peso of principal moves.</p>
+    <div class="bleed-row"><span>Amex — plan commissions (3%/mo + IVA)</span><span class="v">$5,818</span></div>
+    <div class="bleed-row"><span>Invex — Konfio interest (43.9%)</span><span class="v">$864</span></div>
+    <div class="bleed-row"><span class="bleed-total">Total every month</span><span class="v bleed-total">$6,682</span></div>
+    <div class="callout">That's <b>~$80,000 MXN/year (~$4,700 USD)</b> in financing cost alone. Every month you don't attack the principal, this is what it costs to stand still.</div>
+  </div>
+
+  <div class="section">
+    <h2>Income to deploy <span class="tag">new · $150k job</span></h2>
+    <p class="desc">Net monthly, once the Need US salary lands. This is the firepower.</p>
+    <div class="inc-list">
+      <div class="inc-row"><span class="who">Need <span class="meta">$150k gross · semi-monthly</span></span><span class="v">$8,458</span></div>
+      <div class="inc-row"><span class="who">Greptile <span class="meta">net · semi-monthly</span></span><span class="v">$2,200</span></div>
+      <div class="inc-row"><span class="who">Treeline <span class="meta">net · monthly</span></span><span class="v">$1,850</span></div>
+      <div class="inc-row"><span class="who">Nolla <span class="meta">net · bi-weekly</span></span><span class="v">$600</span></div>
+      <div class="inc-row inc-total"><span class="who">Net per month</span><span class="v">$13,108 <span style="font-size:12px;color:var(--muted)">USD</span></span></div>
+    </div>
+    <div class="callout">≈ <b>$222,200 MXN/month</b>. Your entire expensive debt is <b>~$7,020 USD</b> — about <b>half of one month's</b> take-home. This is winnable fast.</div>
+  </div>
+
+  <div class="section">
+    <h2>Monthly surplus <span style="font-size:12px;font-weight:400;color:var(--muted)">· once debt-free</span></h2>
+    <p class="desc">After two rents, Mariana, and SF living — with the office covering 3 meals × 6 days.</p>
+    <div class="bleed-row"><span>Income (net)</span><span class="v" style="color:var(--good)">+$13,108</span></div>
+    <div class="bleed-row"><span>US rent — room / small studio</span><span class="v">−$2,200</span></div>
+    <div class="bleed-row"><span>US living — food ~$250 🍽️ + transport/utils/misc</span><span class="v">−$890</span></div>
+    <div class="bleed-row"><span>MX rent</span><span class="v">−$1,593</span></div>
+    <div class="bleed-row"><span>→ Mariana</span><span class="v">−$885</span></div>
+    <div class="bleed-row"><span style="color:var(--good);font-weight:600">Surplus to save</span><span class="v" style="color:var(--good);font-weight:600">~$7,540/mo</span></div>
+    <div class="callout">≈ <b>$128,000 MXN/mo (~$90k/yr)</b> → the 3-year Asia fund (~$270k) is on track. Salary-only floor, if every side gig vanished: still <b>~$2,900/mo</b>.</div>
+  </div>
+
+  <div class="section">
+    <h2>This month's cash flow</h2>
+    <p class="desc">In &amp; out through Oct 2 · living is an estimate. DolarApp today: <b class="mono">$21,225 MXN</b></p>
+    <div class="ledger-head">
+      <span>Date</span><span>Movement</span><span style="text-align:right">Amount</span><span style="text-align:right">Balance</span>
+    </div>
+    <div id="ledger"></div>
+    <div class="callout" style="border-left-color:var(--debt)">Tightest point ~<b>$4,300 on Sep 29</b> — you clear it, but keep that week light before the Sep 30 paycheck lands.</div>
+    <div class="eyebrow" style="margin:18px 0 10px">The plans → October attack</div>
+    <div class="grid" style="grid-template-columns:1fr;gap:8px">
+      <div class="card" style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+        <div><div class="name">Kill Konfio <span class="rate hot" style="margin-left:4px">43.9%</span></div><div class="note">Highest rate — prepay first, alongside the Invex due</div></div>
+        <div class="mono" style="font-weight:600;font-size:15px;white-space:nowrap">~$3,400</div>
+      </div>
+      <div class="card" style="display:flex;justify-content:space-between;align-items:center;gap:10px;border:2px solid var(--debt)">
+        <div><div class="name">Prepay Amex plans <span class="tag" style="margin-left:4px">the kill shot</span></div><div class="note">Before Oct 8 cut · ask Amex for the payoff quote · waives commissions</div></div>
+        <div class="mono" style="font-weight:600;font-size:15px;white-space:nowrap">~$119,485</div>
+      </div>
+    </div>
+    <div class="callout">Fund it from the ~$79k left after Oct 1, plus the Oct 15 &amp; 30 paychecks. This is what kills the ~$6,682/mo bleed.</div>
+  </div>
+
+  <div class="section">
+    <h2>Payoff calculator</h2>
+    <p class="desc">How much you put toward the expensive debt each month — drag to see the timeline.</p>
+    <div class="slider-head">
+      <span style="font-size:13px;color:var(--muted)">Monthly toward debt</span>
+      <span class="val mono" id="pay-val">$50,000</span>
+    </div>
+    <input type="range" id="pay" min="10000" max="150000" step="5000" value="50000" aria-label="Monthly payment toward debt in MXN">
+    <div class="range-ends"><span>$10k</span><span>$150k / mo</span></div>
+    <div class="calc-out">
+      <div class="stat"><div class="k">Debt-free in</div><div class="n" id="months">—</div></div>
+      <div class="stat affordable"><div class="k">% of monthly income</div><div class="n" id="pct">—</div></div>
+    </div>
+    <div class="callout" id="calc-note"></div>
+  </div>
+
+  <div class="section">
+    <h2>Prepay progress</h2>
+    <p class="desc">Log what you've paid down so far — updates the bar.</p>
+    <div class="prog-track"><div class="prog-fill" id="prog-fill" style="width:0%"></div></div>
+    <div class="prog-meta"><span id="prog-paid">$0 paid</span><span>$146,156 total</span></div>
+    <div class="prog-input">
+      <label for="paid">Paid so far (MXN):</label>
+      <input type="text" inputmode="numeric" id="paid" value="0" aria-label="Amount paid down so far">
+    </div>
+  </div>
+
+  <div class="foot">The one rule: <b>stop deferring.</b> New purchases go on DolarApp debit, not onto a plan.<br>Prepaying an Amex plan waives its remaining commissions — attack Amex + Konfio first, let the 0% IKEA MSI ride.</div>
+</div>
+
+<script>
+const FX=16.95, HIGH=119011, TOTAL=146156, BLEED=6682, INCOME_MXN=13108*FX;
+const rate=BLEED/HIGH; // ~0.0561 blended monthly cost on the expensive debt
+const fmt=n=>"$"+Math.round(n).toLocaleString("en-US");
+function monthsToClear(pay){
+  if(pay<=HIGH*rate) return Infinity;
+  let b=HIGH,m=0;
+  while(b>0&&m<600){b=b*(1+rate)-pay;m++;}
+  return m;
+}
+function addMonths(n){const d=new Date(2026,8,14);d.setMonth(d.getMonth()+n);return d.toLocaleString("en-US",{month:"long",year:"numeric"});}
+const pay=document.getElementById("pay");
+function render(){
+  const p=+pay.value;
+  document.getElementById("pay-val").textContent=fmt(p);
+  const m=monthsToClear(p);
+  const pct=Math.round(p/INCOME_MXN*100);
+  document.getElementById("pct").textContent=pct+"%";
+  const elM=document.getElementById("months"), elE=document.getElementById("eta-months"), elD=document.getElementById("eta-date"), note=document.getElementById("calc-note");
+  if(m===Infinity){
+    elM.textContent="never"; elM.style.color="var(--danger)";
+    elE.textContent="not at this rate"; elD.textContent="";
+    note.innerHTML="At "+fmt(p)+"/mo the bleed outruns you — you must pay more than "+fmt(HIGH*rate)+"/mo just to break even on the expensive balance.";
+  }else{
+    elM.textContent=m+(m===1?" month":" months"); elM.style.color="var(--good)";
+    elE.textContent=m+(m===1?" month":" months"); elD.textContent="· "+addMonths(m);
+    note.innerHTML=fmt(p)+"/mo is <b>"+pct+"%</b> of your ~"+fmt(INCOME_MXN)+" monthly take-home — clears the expensive debt by <b>"+addMonths(m)+"</b>. The 0% IKEA MSI just runs out on its own after.";
+  }
+}
+pay.addEventListener("input",render);
+// progress
+const paidIn=document.getElementById("paid"), fill=document.getElementById("prog-fill"), paidLbl=document.getElementById("prog-paid");
+function loadPaid(){try{return +(localStorage.getItem("dz_debt_paid")||0)}catch(e){return 0}}
+function renderPaid(v){
+  const pct=Math.min(100,Math.max(0,v/TOTAL*100));
+  fill.style.width=pct+"%";
+  paidLbl.textContent=fmt(v)+" paid · "+Math.round(pct)+"%";
+}
+function initPaid(){const v=loadPaid();paidIn.value=v?v.toLocaleString("en-US"):"0";renderPaid(v);}
+paidIn.addEventListener("input",()=>{
+  const v=+paidIn.value.replace(/[^0-9]/g,"")||0;
+  try{localStorage.setItem("dz_debt_paid",v)}catch(e){}
+  renderPaid(v);
+});
+paidIn.addEventListener("blur",()=>{const v=+paidIn.value.replace(/[^0-9]/g,"")||0;paidIn.value=v?v.toLocaleString("en-US"):"0";});
+const ledgerData=[
+ ["Sep 16–24","Living · ~9 days",-11000],
+ ["Sep 25","Nolla paycheck",5085],
+ ["Sep 26–27","Living",-2500],
+ ["Sep 28","Invex due (no-interest)",-7240],
+ ["Sep 29","Living",-1250],
+ ["Sep 30","Need + Greptile + Treeline",121300],
+ ["Oct 1","Rent (MX)",-27000],
+ ["Oct 1","→ Mariana",-15000],
+ ["Oct 2","OpenBank Sept (est)",-4500],
+];
+let lb=21225;
+document.getElementById("ledger").innerHTML=ledgerData.map(([d,l,a])=>{
+  lb+=a; const inc=a>0, low=lb<6000;
+  return '<div class="ledger-row"><span class="d">'+d+'</span><span>'+l+'</span>'+
+    '<span class="mono" style="text-align:right;font-weight:500;color:'+(inc?'var(--good)':'var(--text)')+'">'+(a<0?'−$':'+$')+Math.abs(a).toLocaleString('en-US')+'</span>'+
+    '<span class="mono" style="text-align:right;font-weight:600;color:'+(low?'var(--debt)':'var(--text)')+'">$'+Math.round(lb).toLocaleString('en-US')+'</span></div>';
+}).join("");
+render(); initPaid();
+</script>
