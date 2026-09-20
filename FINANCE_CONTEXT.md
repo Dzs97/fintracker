@@ -21,6 +21,12 @@ Diego = **Diego Antonio Zurita Saenz** (diego@need.ai). Mexican, relocating to *
 - **Stack:** Next.js 14 (App Router), Upstash Redis (KV store), deployed on **Vercel** (auto-deploys on `git push` to `main`).
 - **Live URL:** https://fintracker-rosy.vercel.app
 - **No local Node** on the dev machine → can't build/test locally. **Verify deploys** by bumping the marker in `src/app/api/debug/route.ts` (`build:` field), pushing, then polling `GET /api/debug` until the marker flips + `GET /dashboard` returns 200.
+- ⚠️ **Deploy gotcha (two GitHub accounts):** the repo + Vercel project are owned by **`Dzs97`** (id 279522925), but Diego also has an older **`DiegoZurita`** account (id 3026757). On Vercel's **Hobby plan + private repo**, only the *owner's* commits deploy — commits authored by `DiegoZurita` get **"Deployment Blocked — commit author did not have contributing access."** **Fix (per clone):** set the git author to the owner:
+  ```bash
+  git config user.name "Dzs97"
+  git config user.email "279522925+Dzs97@users.noreply.github.com"
+  ```
+  This is repo-local, so re-run it on any fresh clone. (Alternatives if ever needed: make the repo public — but then strip the finance files first — or upgrade Vercel to Pro. Vercel deploys private repos fine on Pro; on Hobby it must be owner-authored.) Manual deploy that bypasses git-push: `npx vercel --prod` (still needs an owner-authored HEAD commit).
 - **Design:** inline-style React, dark theme, design tokens in `src/lib/utils.ts` (`C` colors, `CAT_COLORS`).
 
 ### Logging data (curl/HTTP API — no UI needed)
